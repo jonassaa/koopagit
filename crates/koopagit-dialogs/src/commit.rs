@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use koopagit_core::commit::{self, AuthorDate, CommitOptions, CommitRow};
@@ -11,7 +12,7 @@ use koopagit_core::status::{Action, StatusEntry, StatusOptions};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use crate::filelist::{self, CheckLink, Item};
-use crate::filelist_actions::{FileListEnv, FileListHost, FileListMenu};
+use crate::filelist_actions::{FileListEnv, FileListHost, FileListMenu, restore_all};
 use crate::filelist_menu::PopMask;
 use crate::progress::{PostAction, ProgressJob};
 use crate::{CommitDialog, Context, DialogResult, FileListBridge, msgbox, spawn_launcher};
@@ -47,7 +48,12 @@ struct Decision {
 #[derive(Default, Clone)]
 struct Carry {
     message: Option<String>,
+    /// "Restore after commit" backups (`m_restorepaths`).
+    backups: HashMap<String, PathBuf>,
 }
+
+/// `IDS_PROC_COMMIT_RESTOREFILES`.
+const RESTORE_TEXT: &str = "You marked some files as \"Restore after commit\".\nDo you want to restore them now? You might lose all changes to this file after marking it.";
 
 /// Pending answer to a question shown in the notice bar.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -57,6 +63,8 @@ enum Pending {
     SignOff,
     Template,
     Cancel,
+    /// The cancel-time "Restore after commit" question.
+    Restore,
 }
 
 struct State {
@@ -89,13 +97,15 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             (_, Some(f)) => std::fs::read_to_string(f).ok(),
             _ => None,
         },
+        backups: HashMap::new(),
     };
     loop {
-        let Some(decision) = show(ctx, &carry)? else {
+        let Some(decision) = show(ctx, &mut carry)? else {
             return Ok(1);
         };
         let ok = crate::progress::run(decision.job)?;
         let _ = std::fs::remove_file(&decision.message_file);
+        restore_after_commit(ctx.repo.workdir(), &mut carry.backups, ok);
         if !ok {
             // A failed commit keeps the dialog open with the message.
             carry.message = Some(decision.message);
@@ -116,6 +126,26 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             }
         }
     }
+}
+
+/// `RestoreFiles(progress.m_GitStatus == 0, false)`: after a successful commit
+/// the marked files are restored without asking; after a failed one the user
+/// chooses between restoring and keeping the current state.
+fn restore_after_commit(workdir: &Path, backups: &mut HashMap<String, PathBuf>, committed: bool) {
+    if backups.is_empty() {
+        return;
+    }
+    if !committed
+        && msgbox::ask(
+            "KoopaGit",
+            RESTORE_TEXT,
+            &["&Restore old state", "&Keep current state"],
+        ) != Some(0)
+    {
+        return;
+    }
+    restore_all(workdir, backups);
+    backups.clear();
 }
 
 /// `CheckUserData`: user.name and user.email must be set.
@@ -252,7 +282,7 @@ fn load_items(ctx: &Context, show_unversioned: bool, whole: bool, amend: bool) -
         .collect()
 }
 
-fn show(ctx: &Context, carry: &Carry) -> DialogResult<Option<Decision>> {
+fn show(ctx: &Context, carry: &mut Carry) -> DialogResult<Option<Decision>> {
     let dlg = CommitDialog::new()?;
     let repo = &ctx.repo;
     let forced_whole = whole_project_forced(ctx);
@@ -332,6 +362,7 @@ fn show(ctx: &Context, carry: &Carry) -> DialogResult<Option<Decision>> {
             },
         )
     };
+    list_menu.set_backups(std::mem::take(&mut carry.backups));
     FileListMenu::install(
         &dlg.global::<FileListBridge>(),
         std::slice::from_ref(&list_menu),
@@ -550,9 +581,16 @@ fn show(ctx: &Context, carry: &Carry) -> DialogResult<Option<Decision>> {
     {
         let state = state.clone();
         let weak = dlg.as_weak();
+        let list_menu = list_menu.clone();
         dlg.on_cancel(move || {
             let Some(d) = weak.upgrade() else { return };
             let st = state.borrow();
+            if st.pending == Pending::Restore {
+                // Escape answers the restore question with Cancel.
+                drop(st);
+                clear_notice(&d, &state);
+                return;
+            }
             let changed = d.get_message().as_str().trim() != st.template.trim();
             if (changed || !st.items.is_empty()) && st.pending != Pending::Cancel {
                 drop(st);
@@ -566,7 +604,18 @@ fn show(ctx: &Context, carry: &Carry) -> DialogResult<Option<Decision>> {
                 );
                 return;
             }
-            let _ = d.hide();
+            drop(st);
+            close_cancelled(&d, &state, &list_menu);
+        });
+    }
+    {
+        // The title-bar close button is Cancel (`OnCancel`).
+        let weak = dlg.as_weak();
+        dlg.window().on_close_requested(move || {
+            if let Some(d) = weak.upgrade() {
+                d.invoke_cancel();
+            }
+            slint::CloseRequestResponse::KeepWindowShown
         });
     }
 
@@ -607,12 +656,18 @@ fn show(ctx: &Context, carry: &Carry) -> DialogResult<Option<Decision>> {
         let state = state.clone();
         let weak = dlg.as_weak();
         let ci = commit_ctx.clone();
+        let list_menu = list_menu.clone();
         dlg.on_notice_clicked(move |i| {
             let Some(d) = weak.upgrade() else { return };
             let pending = state.borrow().pending;
             clear_notice(&d, &state);
             match (pending, i) {
-                (Pending::Cancel, 0) => {
+                (Pending::Cancel, 0) => close_cancelled(&d, &state, &list_menu),
+                (Pending::Restore, 0) => {
+                    restore_all(&ci.workdir, &list_menu.take_backups());
+                    let _ = d.hide();
+                }
+                (Pending::Restore, 1) => {
                     let _ = d.hide();
                 }
                 (Pending::Conflicts, 1) | (Pending::Template, 0) | (Pending::SignOff, 1) => {
@@ -645,6 +700,7 @@ fn show(ctx: &Context, carry: &Carry) -> DialogResult<Option<Decision>> {
     dlg.run()?;
 
     let decision = state.borrow_mut().decision.take();
+    carry.backups = list_menu.take_backups();
     let mut settings = ctx.settings.clone();
     if !forced_whole {
         settings.set_bool(&whole_project_key(ctx), dlg.get_whole_project());
@@ -698,6 +754,24 @@ fn notice(
     let labels: Vec<SharedString> = buttons.iter().map(|b| (*b).into()).collect();
     d.set_notice_buttons(ModelRc::new(VecModel::from(labels)));
     d.set_notice_error(error);
+}
+
+/// `OnCancel` after the cancel question: `RestoreFiles()` asks about files
+/// marked "Restore after commit" (Restore / Keep / Cancel), then the dialog
+/// closes.
+fn close_cancelled(d: &CommitDialog, state: &Rc<RefCell<State>>, list_menu: &FileListMenu) {
+    if list_menu.backups().is_empty() {
+        let _ = d.hide();
+        return;
+    }
+    notice(
+        d,
+        state,
+        Pending::Restore,
+        RESTORE_TEXT,
+        &["Restore old state", "Keep current state", "Cancel"],
+        false,
+    );
 }
 
 fn clear_notice(d: &CommitDialog, state: &Rc<RefCell<State>>) {
