@@ -3494,6 +3494,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "i-slint-backend-testing",
+ "i-slint-common",
  "koopagit-core",
  "koopagit-shell",
  "rfd",

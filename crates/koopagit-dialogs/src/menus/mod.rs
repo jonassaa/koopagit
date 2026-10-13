@@ -5,6 +5,10 @@
 //! it: `ui/dynmenu.slint` repeats a fixed number of [`Block`]s, because a Slint
 //! `for` can repeat only one element type. [`pack`] turns a flat entry list into
 //! those blocks.
+//!
+//! Slint copies `DynMenuArea` into every place that uses it, so each block
+//! costs generated code at ~30 sites: keep [`MAX_BLOCKS`] as small as the
+//! menus allow.
 
 use std::cell::{Cell, RefCell};
 
@@ -12,8 +16,15 @@ use slint::{ModelRc, VecModel};
 
 use crate::{MenuBlock, MenuLeaf, MenuSub};
 
-/// Number of blocks `ui/dynmenu.slint` provides.
-pub const MAX_BLOCKS: usize = 24;
+/// Number of blocks `ui/dynmenu.slint` provides. A new block starts only where
+/// an item follows a submenu, so a menu with `n` submenus needs at most `n + 1`;
+/// the Log menu has the most (7). [`Menu::finish`] checks this in debug builds.
+pub const MAX_BLOCKS: usize = 8;
+
+/// Title Slint gives a lowered `MenuSeparator` (`i_slint_common::MENU_SEPARATOR_PLACEHOLDER_TITLE`).
+/// A `MenuItem` with this title is shown as a separator, which lets separators
+/// share the items' `for`.
+pub const SEPARATOR_TITLE: &str = "\u{E001}⸺";
 
 /// A clickable entry inside a submenu (or a top-level item).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,7 +139,11 @@ impl Menu {
     }
 
     pub fn finish(self) -> Vec<Entry> {
-        normalize(self.entries)
+        let entries = normalize(self.entries);
+        // Panics if `ui/dynmenu.slint` has too few blocks, so every menu test checks it.
+        #[cfg(debug_assertions)]
+        pack(&entries);
+        entries
     }
 }
 
@@ -160,12 +175,20 @@ pub fn normalize(entries: Vec<Entry>) -> Vec<Entry> {
     out
 }
 
-/// A run of items, then submenus, then an optional separator.
+/// A run of items and separators, then a run of submenus.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Block {
+    /// Separators are leaves titled [`SEPARATOR_TITLE`].
     pub items: Vec<Leaf>,
     pub subs: Vec<(String, bool, Vec<Leaf>)>,
-    pub separator: bool,
+}
+
+fn separator_leaf() -> Leaf {
+    Leaf {
+        id: -1,
+        title: SEPARATOR_TITLE.into(),
+        enabled: false,
+    }
 }
 
 /// Splits a flat menu into blocks that `ui/dynmenu.slint` can render in order.
@@ -173,30 +196,26 @@ pub struct Block {
 pub fn pack(entries: &[Entry]) -> Vec<Block> {
     let mut blocks: Vec<Block> = vec![Block::default()];
     for e in entries {
-        let cur = blocks.last_mut().expect("non-empty");
-        match e {
-            Entry::Item(l) => {
-                if !cur.subs.is_empty() || cur.separator {
-                    blocks.push(Block::default());
-                }
-                blocks.last_mut().expect("non-empty").items.push(l.clone());
-            }
+        let item = match e {
+            Entry::Item(l) => l.clone(),
+            Entry::Separator => separator_leaf(),
             Entry::Sub {
                 title,
                 enabled,
                 children,
             } => {
-                if cur.separator {
-                    blocks.push(Block::default());
-                }
                 blocks.last_mut().expect("non-empty").subs.push((
                     title.clone(),
                     *enabled,
                     children.clone(),
                 ));
+                continue;
             }
-            Entry::Separator => cur.separator = true,
+        };
+        if !blocks.last().expect("non-empty").subs.is_empty() {
+            blocks.push(Block::default());
         }
+        blocks.last_mut().expect("non-empty").items.push(item);
     }
     debug_assert!(
         blocks.len() <= MAX_BLOCKS,
@@ -236,7 +255,6 @@ pub fn to_model(entries: &[Entry]) -> ModelRc<MenuBlock> {
                     })
                     .collect::<Vec<_>>(),
             )),
-            separator: b.separator,
         })
         .collect();
     ModelRc::new(VecModel::from(blocks))
@@ -274,14 +292,15 @@ pub fn slint_template() -> String {
          //\n\
          // A native context menu whose content comes from Rust (`menus::to_model`).\n\
          // Slint can only repeat one element type per `for`, so the menu is a fixed\n\
-         // sequence of blocks: items, then submenus, then an optional separator.\n\
+         // sequence of blocks: items, then submenus. Separators are items titled\n\
+         // with Slint's separator placeholder (`menus::SEPARATOR_TITLE`).\n\
          //\n\
          // A TouchArea child grabs every button press, so the area never sees the\n\
          // right-click: on a right press the TouchArea must call\n\
          // `parent.show({ x: self.mouse-x, y: self.mouse-y })` itself.\n\n\
          export struct MenuLeaf { id: int, title: string, enabled: bool }\n\
          export struct MenuSub { title: string, enabled: bool, children: [MenuLeaf] }\n\
-         export struct MenuBlock { items: [MenuLeaf], subs: [MenuSub], separator: bool }\n\n\
+         export struct MenuBlock { items: [MenuLeaf], subs: [MenuSub] }\n\n\
          export component DynMenuArea inherits ContextMenuArea {\n\
          \x20   // Evaluated each time the menu opens.\n\
          \x20   pure callback blocks() -> [MenuBlock];\n\
@@ -295,8 +314,7 @@ pub fn slint_template() -> String {
              \x20           title: m.title;\n\
              \x20           enabled: m.enabled;\n\
              \x20           for c in m.children: MenuItem {{ title: c.title; enabled: c.enabled; activated => {{ root.chosen(c.id); }} }}\n\
-             \x20       }}\n\
-             \x20       if root.blocks()[{k}].separator: MenuSeparator {{ }}\n"
+             \x20       }}\n"
         ));
     }
     s.push_str("    }\n}\n");
@@ -342,13 +360,19 @@ mod tests {
             .sub("S2", vec![leaf(A::Four, "t", true)])
             .item(A::One, "c");
         let blocks = pack(&m.finish());
-        let shape: Vec<(usize, usize, bool)> = blocks
+        let shape: Vec<(usize, usize)> = blocks
             .iter()
-            .map(|b| (b.items.len(), b.subs.len(), b.separator))
+            .map(|b| (b.items.len(), b.subs.len()))
             .collect();
+        assert_eq!(shape, [(1, 1), (2, 1), (1, 0)]);
+        assert_eq!(blocks[1].items[1], separator_leaf());
+    }
+
+    #[test]
+    fn separator_title_matches_slint() {
         assert_eq!(
-            shape,
-            [(1, 1, false), (1, 0, true), (0, 1, false), (1, 0, false)]
+            SEPARATOR_TITLE,
+            i_slint_common::MENU_SEPARATOR_PLACEHOLDER_TITLE
         );
     }
 

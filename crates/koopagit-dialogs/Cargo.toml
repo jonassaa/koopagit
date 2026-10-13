@@ -18,4 +18,5 @@ slint-build = "1.18"
 
 [dev-dependencies]
 i-slint-backend-testing = "1.18"
+i-slint-common = "1.18"
 tempfile.workspace = true
