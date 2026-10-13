@@ -1,0 +1,12 @@
+[package]
+name = "koopagit-ui"
+description = "The dialogs' Slint markup compiled to Rust; a crate of its own so Rust edits in koopagit-dialogs don't recompile the generated code."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+slint = "1.18"
+
+[build-dependencies]
+slint-build = "1.18"

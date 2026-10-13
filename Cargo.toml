@@ -11,6 +11,7 @@ rust-version = "1.85"
 koopagit-core = { path = "crates/koopagit-core" }
 koopagit-shell = { path = "crates/koopagit-shell" }
 koopagit-dialogs = { path = "crates/koopagit-dialogs" }
+koopagit-ui = { path = "crates/koopagit-ui" }
 thiserror = "2"
 clap = "4.6"
 tempfile = "3"

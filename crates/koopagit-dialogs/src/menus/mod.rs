@@ -2,9 +2,9 @@
 //!
 //! Menu *content* is decided here, in pure functions that mirror upstream
 //! TortoiseGit's conditions (see `docs/spec/spec-menus.md`). Slint only renders
-//! it: `ui/dynmenu.slint` repeats a fixed number of [`Block`]s, because a Slint
-//! `for` can repeat only one element type. [`pack`] turns a flat entry list into
-//! those blocks.
+//! it: `ui/dynmenu.slint` (in `koopagit-ui`) repeats a fixed number of
+//! [`Block`]s, because a Slint `for` can repeat only one element type. [`pack`]
+//! turns a flat entry list into those blocks.
 //!
 //! Slint copies `DynMenuArea` into every place that uses it, so each block
 //! costs generated code at ~30 sites: keep [`MAX_BLOCKS`] as small as the
@@ -378,7 +378,10 @@ mod tests {
 
     #[test]
     fn dynmenu_slint_is_generated() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/ui/dynmenu.slint");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../koopagit-ui/ui/dynmenu.slint"
+        );
         let expected = slint_template();
         if std::env::var_os("KOOPAGIT_REGEN_DYNMENU").is_some() {
             std::fs::write(path, &expected).unwrap();
@@ -386,7 +389,7 @@ mod tests {
         let actual = std::fs::read_to_string(path).unwrap_or_default();
         assert!(
             actual == expected,
-            "ui/dynmenu.slint is stale; rerun with KOOPAGIT_REGEN_DYNMENU=1"
+            "koopagit-ui/ui/dynmenu.slint is stale; rerun with KOOPAGIT_REGEN_DYNMENU=1"
         );
     }
 }

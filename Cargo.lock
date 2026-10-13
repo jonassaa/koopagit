@@ -3497,9 +3497,9 @@ dependencies = [
  "i-slint-common",
  "koopagit-core",
  "koopagit-shell",
+ "koopagit-ui",
  "rfd",
  "slint",
- "slint-build",
  "tempfile",
  "trash",
 ]
@@ -3537,6 +3537,14 @@ version = "0.1.0"
 dependencies = [
  "koopagit-core",
  "tempfile",
+]
+
+[[package]]
+name = "koopagit-ui"
+version = "0.1.0"
+dependencies = [
+ "slint",
+ "slint-build",
 ]
 
 [[package]]
