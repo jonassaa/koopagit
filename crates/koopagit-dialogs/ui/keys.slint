@@ -1,0 +1,67 @@
+// Keyboard behaviour that Win32 dialogs and controls get for free and Slint
+// does not: see docs/spec/spec-keyboard.md.
+import { Palette } from "std-widgets.slint";
+
+export global KeyboardPrefs {
+    // macOS has no access keys (Option+letter types characters). Tests force it on.
+    in-out property <bool> access-keys: Platform.os != OperatingSystemType.macos;
+}
+
+// IsDialogMessage: Enter that no control consumed presses the default button,
+// Escape cancels, and Alt+letter triggers the control whose caption carries that
+// `&` access key. Wrap a dialog's content in it and point the Window's
+// `forward-focus` at it (or at a control inside it) so keys arrive before the
+// user clicks anything.
+// Single-line LineEdits consume Enter themselves: give them `accepted => { root.ok(); }`
+// where Enter should press the default button.
+export component DialogKeys inherits FocusScope {
+    in property <bool> ok-enabled: true;
+    in property <bool> cancel-enabled: true;
+    callback ok();
+    callback cancel();
+    // Lower-case access-key letter; return true when a control handled it.
+    callback access-key(string) -> bool;
+
+    focus-on-click: false;
+    focus-on-tab-navigation: false;
+
+    capture-key-pressed(e) => {
+        if (KeyboardPrefs.access-keys && e.modifiers.alt && !e.modifiers.control && !e.modifiers.meta
+                && e.text.character-count == 1) {
+            if (root.access-key(e.text.to-lowercase())) { return accept; }
+        }
+        reject
+    }
+    key-pressed(e) => {
+        if (e.modifiers.control || e.modifiers.alt || e.modifiers.meta) { return reject; }
+        if (e.text == Key.Escape) {
+            if (root.cancel-enabled) { root.cancel(); }
+            return accept;
+        }
+        if (e.text == Key.Return) {
+            if (root.ok-enabled) { root.ok(); }
+            return accept;
+        }
+        reject
+    }
+}
+
+// Makes a mouse-only control (radio, tri-state check, link) a Win32-style tab
+// stop: Tab reaches it, Space activates it, and it draws a focus rectangle.
+// Place it before the control's TouchArea and call `focus()` from that TouchArea.
+export component SpaceActivate inherits FocusScope {
+    callback activated();
+    focus-on-click: false;
+    key-pressed(e) => {
+        if (e.text == " " && !e.modifiers.control && !e.modifiers.alt && !e.modifiers.meta) {
+            if (root.enabled) { root.activated(); }
+            return accept;
+        }
+        reject
+    }
+    if root.has-focus: Rectangle {
+        border-width: 1px;
+        border-radius: 2px;
+        border-color: Palette.accent-background;
+    }
+}

@@ -1,0 +1,240 @@
+// Widgets used by the remote dialogs: an editable combo box (CHistoryCombo),
+// a tri-state check box (BS_AUTO3STATE) and the drop-down of a menu button
+// (CMenuButton).
+import { LineEdit, Button, Palette } from "std-widgets.slint";
+import { SpaceActivate } from "keys.slint";
+
+// CHistoryCombo: Enter with the drop-down closed passes to the dialog (wire
+// `accepted` to the default button) unless `want-return` is set; with it open,
+// Enter only closes it. F4 / Alt+Down open the drop-down, Up/Down step through
+// the items like a Win32 CBS_DROPDOWN combo.
+export component EditCombo inherits FocusScope {
+    in-out property <string> text;
+    in property <[string]> items;
+    in property <string> placeholder;
+    // CHistoryCombo::m_bWantReturn: Enter stays in the combo.
+    in property <bool> want-return;
+    callback edited(string);
+    callback selected(string);
+    callback accepted();
+    property <int> current: -1;
+    property <int> highlight: -1;
+    focus-on-click: false;
+    focus-on-tab-navigation: false;
+    forward-focus: edit;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    function pick(i: int) {
+        if (i < 0 || i >= root.items.length) { return; }
+        root.current = i;
+        root.text = root.items[i];
+        root.selected(root.items[i]);
+    }
+    function open() {
+        if (root.items.length == 0) { return; }
+        root.highlight = root.current;
+        popup.show();
+    }
+
+    capture-key-pressed(e) => {
+        if (!edit.has-focus || e.modifiers.control || e.modifiers.meta) { return reject; }
+        if ((e.text == Key.F4 && !e.modifiers.alt)
+                || (e.modifiers.alt && (e.text == Key.DownArrow || e.text == Key.UpArrow))) {
+            root.open();
+            return accept;
+        }
+        if (!e.modifiers.alt && !e.modifiers.shift && root.items.length > 0) {
+            if (e.text == Key.UpArrow) { root.pick(Math.max(root.current - 1, 0)); return accept; }
+            if (e.text == Key.DownArrow) { root.pick(Math.min(root.current + 1, root.items.length - 1)); return accept; }
+        }
+        reject
+    }
+
+    HorizontalLayout {
+        spacing: 2px;
+        edit := LineEdit {
+            text <=> root.text;
+            enabled: root.enabled;
+            placeholder-text: root.placeholder;
+            edited(t) => { root.current = -1; root.edited(t); }
+            accepted => {
+                if (!root.want-return) { root.accepted(); }
+            }
+        }
+        Button {
+            text: "▾";
+            width: 28px;
+            enabled: root.enabled && root.items.length > 0;
+            clicked => { root.open(); }
+        }
+    }
+    popup := PopupWindow {
+        x: 0;
+        y: edit.height;
+        width: edit.width;
+        forward-focus: popup-keys;
+        popup-keys := FocusScope {
+            key-pressed(e) => {
+                if (e.text == Key.UpArrow) { root.highlight = Math.max(root.highlight - 1, 0); return accept; }
+                if (e.text == Key.DownArrow) { root.highlight = Math.min(root.highlight + 1, root.items.length - 1); return accept; }
+                if (e.text == Key.Return) {
+                    root.pick(root.highlight);
+                    popup.close();
+                    return accept;
+                }
+                if (e.text == Key.Escape || e.text == Key.F4) { popup.close(); return accept; }
+                reject
+            }
+            Rectangle {
+                background: Palette.background;
+                border-width: 1px;
+                border-color: #888;
+                VerticalLayout {
+                    padding: 2px;
+                    for item[i] in root.items: Rectangle {
+                        height: 22px;
+                        ta := TouchArea { clicked => { root.pick(i); } }
+                        background: ta.has-hover || i == root.highlight ? Palette.selection-background : transparent;
+                        Text {
+                            x: 6px;
+                            text: item;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            color: ta.has-hover || i == root.highlight ? Palette.selection-foreground : Palette.foreground;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// state: 0 unchecked, 1 checked, 2 indeterminate ("use the configured default").
+export component TriCheck inherits Rectangle {
+    in property <string> text;
+    in-out property <int> state: 2;
+    in property <bool> enabled: true;
+    callback toggled(int);
+    min-height: 22px;
+
+    public function take-focus() { focus-scope.focus(); }
+    // BS_AUTO3STATE cycles unchecked -> checked -> indeterminate -> unchecked.
+    public function toggle() {
+        if (!root.enabled) { return; }
+        root.state = root.state == 0 ? 1 : root.state == 1 ? 2 : 0;
+        root.toggled(root.state);
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+        alignment: start;
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
+            border-width: 1px;
+            border-radius: 3px;
+            border-color: root.enabled ? Palette.foreground.transparentize(0.4) : #8886;
+            background: root.state == 1 ? Palette.accent-background : transparent;
+            Text {
+                text: root.state == 1 ? "✓" : "";
+                color: Palette.accent-foreground;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: parent.width;
+                height: parent.height;
+                font-size: 11px;
+            }
+            Rectangle {
+                visible: root.state == 2;
+                width: 8px;
+                height: 8px;
+                background: Palette.foreground.transparentize(0.4);
+            }
+        }
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.enabled ? Palette.foreground : #8888;
+        }
+    }
+    focus-scope := SpaceActivate {
+        enabled: root.enabled;
+        activated => { root.toggle(); }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            focus-scope.focus();
+            root.toggle();
+        }
+    }
+}
+
+// The drop-down of a menu button (CMenuButton). Mouse, Up/Down + Enter/Space,
+// Escape, and the entries' `&` mnemonics (plain or with Alt, like a Win32 menu).
+export component KeyMenu inherits PopupWindow {
+    in property <[string]> entries;
+    // Lower-case mnemonic letter per entry ("" for none).
+    in property <[string]> keys;
+    in property <length> item-width: 240px;
+    callback picked(int);
+    // The popup is instantiated on each show, so this starts at -1 every time.
+    property <int> highlight: -1;
+    forward-focus: menu-keys;
+
+    function choose(i: int) {
+        if (i < 0 || i >= root.entries.length) { return; }
+        root.close();
+        root.picked(i);
+    }
+    // First entry whose mnemonic is `k`, or -1 (menus have at most eight entries).
+    function key-index(k: string) -> int {
+        if (k == "") { return -1; }
+        if (root.keys[0] == k) { return 0; }
+        if (root.keys[1] == k) { return 1; }
+        if (root.keys[2] == k) { return 2; }
+        if (root.keys[3] == k) { return 3; }
+        if (root.keys[4] == k) { return 4; }
+        if (root.keys[5] == k) { return 5; }
+        if (root.keys[6] == k) { return 6; }
+        if (root.keys[7] == k) { return 7; }
+        -1
+    }
+
+    menu-keys := FocusScope {
+        key-pressed(e) => {
+            if (e.text == Key.UpArrow) { root.highlight = Math.max(root.highlight - 1, 0); return accept; }
+            if (e.text == Key.DownArrow) { root.highlight = Math.min(root.highlight + 1, root.entries.length - 1); return accept; }
+            if (e.text == Key.Return || e.text == " ") { root.choose(root.highlight); return accept; }
+            if (e.text == Key.Escape || e.text == Key.F4) { root.close(); return accept; }
+            if (!e.modifiers.control && !e.modifiers.meta) {
+                let i = root.key-index(e.text.to-lowercase());
+                if (i >= 0) { root.choose(i); return accept; }
+            }
+            reject
+        }
+        Rectangle {
+            background: Palette.background;
+            border-width: 1px;
+            border-color: #888;
+            VerticalLayout {
+                padding: 4px;
+                for label[i] in root.entries: Rectangle {
+                    height: 24px;
+                    width: root.item-width;
+                    ta := TouchArea { clicked => { root.picked(i); } }
+                    background: ta.has-hover || i == root.highlight ? Palette.selection-background : transparent;
+                    Text {
+                        x: 6px;
+                        text: label;
+                        height: parent.height;
+                        vertical-alignment: center;
+                        color: ta.has-hover || i == root.highlight ? Palette.selection-foreground : Palette.foreground;
+                    }
+                }
+            }
+        }
+    }
+}

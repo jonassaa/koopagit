@@ -1,0 +1,28 @@
+[package]
+name = "koopagit-explorer"
+description = "Windows Explorer shell extension (context menu + icon overlays). Empty on other OSes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(windows)'.dependencies]
+koopagit-core.workspace = true
+koopagit-shell.workspace = true
+# Needed by the `#[implement]` macro.
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_SystemServices",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }

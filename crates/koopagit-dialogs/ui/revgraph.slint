@@ -1,0 +1,195 @@
+// IDD_REVISIONGRAPH: caption "Revision Graph", menu bar IDR_REVISIONGRAPH.
+import { ScrollView, Palette } from "std-widgets.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+export struct GraphNode {
+    // Top-left corner at zoom 1, in logical pixels.
+    x: length,
+    y: length,
+    title: string,
+    labels: string,
+    subject: string,
+    // 0 plain commit, 1 current branch, 2 local branch, 3 remote branch, 4 tag, 5 merge/fork
+    kind: int,
+    selected: bool,
+}
+
+export component RevisionGraphDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Revision Graph";
+    in property <[GraphNode]> nodes;
+    // SVG path commands of all edges, at zoom 1.
+    in property <string> edges;
+    in property <length> graph-width;
+    in property <length> graph-height;
+    in property <length> node-width: 170px;
+    in property <length> node-height: 46px;
+    in-out property <float> zoom: 1.0;
+    in property <bool> branchings-and-merges;
+    in property <bool> all-tags;
+    in property <bool> arrows-to-merges;
+    in property <bool> two-selected;
+    in property <bool> one-selected;
+    in property <string> status-text;
+    pure callback menu-for(int) -> [MenuBlock];
+    callback menu-chosen(int, int);
+    callback node-clicked(int, bool);
+    callback node-double-clicked(int);
+    callback save-graph();
+    callback exit();
+    callback zoom-fit(int);
+    callback toggle-branchings();
+    callback toggle-all-tags();
+    callback toggle-arrows();
+    callback git-action(int);
+    // F5: re-read the history (UpdateFullHistory).
+    callback reload();
+
+    // Scrolls the graph by (dx, dy), clamped to the content.
+    function scroll-by(dx: length, dy: length) {
+        view.content-x = max(min(0px, view.visible-width - view.content-width), min(0px, view.content-x - dx));
+        view.content-y = max(min(0px, view.visible-height - view.content-height), min(0px, view.content-y - dy));
+    }
+
+    title: root.dialog-title;
+    preferred-width: 900px;
+    preferred-height: 640px;
+    min-width: 400px;
+    min-height: 300px;
+    background: Palette.background;
+
+    MenuBar {
+        Menu {
+            title: "File";
+            MenuItem { title: "Save graph as..."; activated => { root.save-graph(); } }
+            MenuSeparator { }
+            MenuItem { title: "Exit"; activated => { root.exit(); } }
+        }
+        Menu {
+            title: "View";
+            MenuItem { title: "Zoom in"; activated => { root.zoom = min(4.0, root.zoom * 1.25); } }
+            MenuItem { title: "Zoom out"; activated => { root.zoom = max(0.2, root.zoom / 1.25); } }
+            MenuItem { title: "Zoom to 100%"; activated => { root.zoom = 1.0; } }
+            MenuItem { title: "Fit height"; activated => { root.zoom-fit(1); } }
+            MenuItem { title: "Fit width"; activated => { root.zoom-fit(2); } }
+            MenuItem { title: "Fit graph"; activated => { root.zoom-fit(3); } }
+            MenuSeparator { }
+            MenuItem {
+                title: "Show branchings and merges";
+                checkable: true;
+                checked: root.branchings-and-merges;
+                activated => { root.toggle-branchings(); }
+            }
+            MenuItem {
+                title: "Show all tags";
+                checkable: true;
+                checked: root.all-tags;
+                activated => { root.toggle-all-tags(); }
+            }
+            MenuItem {
+                title: "Arrows point towards merges";
+                checkable: true;
+                checked: root.arrows-to-merges;
+                activated => { root.toggle-arrows(); }
+            }
+        }
+        Menu {
+            title: "Git";
+            MenuItem { title: "Compare revisions"; enabled: root.two-selected; activated => { root.git-action(1); } }
+            MenuItem { title: "Compare HEAD revisions"; enabled: root.one-selected || root.two-selected; activated => { root.git-action(2); } }
+            MenuItem { title: "Unified diff"; enabled: root.two-selected; activated => { root.git-action(3); } }
+            MenuItem { title: "Unified diff of HEAD revisions"; enabled: root.one-selected || root.two-selected; activated => { root.git-action(4); } }
+        }
+    }
+
+    forward-focus: keys;
+    keys := DialogKeys {
+        // OnOK only applies the zoom combo, which KoopaGit has in the View menu.
+        ok-enabled: false;
+        cancel => { root.exit(); }
+        // CRevisionGraphDlg::PreTranslateMessage: arrows scroll 20px, PgUp/PgDn half the view.
+        KeyBinding { keys: @keys(UpArrow); activated => { root.scroll-by(0px, -20px); } }
+        KeyBinding { keys: @keys(DownArrow); activated => { root.scroll-by(0px, 20px); } }
+        KeyBinding { keys: @keys(LeftArrow); activated => { root.scroll-by(-20px, 0px); } }
+        KeyBinding { keys: @keys(RightArrow); activated => { root.scroll-by(20px, 0px); } }
+        KeyBinding { keys: @keys(PageUp); activated => { root.scroll-by(0px, -view.visible-height / 2); } }
+        KeyBinding { keys: @keys(PageDown); activated => { root.scroll-by(0px, view.visible-height / 2); } }
+        KeyBinding { keys: @keys(F5); activated => { root.reload(); } }
+        VerticalLayout {
+            view := ScrollView {
+                vertical-stretch: 1;
+                content-width: max(self.width, root.graph-width * root.zoom + 40px);
+                content-height: max(self.height, root.graph-height * root.zoom + 40px);
+                Path {
+                    x: 20px;
+                    y: 20px;
+                    width: root.graph-width * root.zoom;
+                    height: root.graph-height * root.zoom;
+                    viewbox-x: 0;
+                    viewbox-y: 0;
+                    viewbox-width: root.graph-width / 1px;
+                    viewbox-height: root.graph-height / 1px;
+                    commands: root.edges;
+                    stroke: Palette.foreground.with-alpha(0.55);
+                    stroke-width: 1.5px;
+                }
+                for n[i] in root.nodes: Rectangle {
+                    x: 20px + n.x * root.zoom;
+                    y: 20px + n.y * root.zoom;
+                    width: root.node-width * root.zoom;
+                    height: root.node-height * root.zoom;
+                    border-radius: 6px * root.zoom;
+                    border-width: n.selected ? 3px : 1px;
+                    border-color: n.selected ? Palette.accent-background : Palette.border;
+                    background: n.kind == 1 ? #ff6464 : n.kind == 2 ? #7fdc7f : n.kind == 3 ? #ffdcaa
+                        : n.kind == 4 ? #ffff8c : n.kind == 5 ? #d0d0d0 : #f0f0f0;
+                    clip: true;
+                    DynMenuArea {
+                        blocks() => { return root.menu-for(i); }
+                        chosen(id) => { root.menu-chosen(i, id); }
+                        TouchArea {
+                            pointer-event(e) => {
+                                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) {
+                                    root.node-clicked(i, e.modifiers.control || e.modifiers.meta);
+                                }
+                                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right && !n.selected) {
+                                    root.node-clicked(i, false);
+                                }
+                                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                    parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                }
+                            }
+                            double-clicked => { root.node-double-clicked(i); }
+                        }
+                    }
+                    VerticalLayout {
+                        padding: 4px * root.zoom;
+                        alignment: center;
+                        Text {
+                            text: n.labels != "" ? n.labels : n.title;
+                            color: #000;
+                            font-size: 12px * root.zoom;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: n.labels != "" ? n.title : n.subject;
+                            color: #333;
+                            font-size: 10px * root.zoom;
+                            horizontal-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+            }
+            Text {
+                text: root.status-text;
+                color: Palette.foreground.with-alpha(0.7);
+                height: 20px;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

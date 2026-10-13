@@ -1,0 +1,76 @@
+// TaskDialog / MessageBox replacement used outside of other dialogs.
+import { Button, VerticalBox, HorizontalBox, CheckBox } from "std-widgets.slint";
+import { DialogKeys } from "keys.slint";
+import { KoopaWindow } from "window.slint";
+
+export component MessageBox inherits KoopaWindow {
+    in property <string> dialog-title: "KoopaGit";
+    in property <string> text;
+    in property <[string]> buttons: ["OK"];
+    // Lower-case `&` access letter per button ("" for none); see msgbox.rs.
+    in property <[string]> button-keys;
+    in property <int> default-button: 0;
+    // The button Escape answers (CMessageBox: Cancel, else Abort, else No);
+    // -1 = Escape does nothing.
+    in property <int> cancel-button: -1;
+    in property <string> check-text;
+    in-out property <bool> checked;
+    callback clicked(int);
+    // Ctrl+C / Ctrl+Insert: copy the message text.
+    callback copy-text();
+    title: root.dialog-title;
+    min-width: 380px;
+    max-width: 640px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok-enabled: root.default-button >= 0 && root.default-button < root.buttons.length;
+        ok => { root.clicked(root.default-button); }
+        cancel-enabled: root.cancel-button >= 0 && root.cancel-button < root.buttons.length;
+        cancel => { root.clicked(root.cancel-button); }
+        // CMessageBox has at most three buttons.
+        access-key(k) => {
+            if (root.button-keys[0] == k) { root.clicked(0); return true; }
+            if (root.button-keys[1] == k) { root.clicked(1); return true; }
+            if (root.button-keys[2] == k) { root.clicked(2); return true; }
+            if (root.button-keys[3] == k) { root.clicked(3); return true; }
+            false
+        }
+        KeyBinding {
+            keys: @keys(Control + C);
+            activated => { root.copy-text(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + Insert);
+            activated => { root.copy-text(); }
+        }
+        VerticalBox {
+            Text { text: root.text; wrap: word-wrap; }
+            if root.check-text != "": CheckBox { text: root.check-text; checked <=> root.checked; }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                for b[i] in root.buttons: Button {
+                    text: b;
+                    primary: i == root.default-button;
+                    clicked => { root.clicked(i); }
+                }
+            }
+        }
+    }
+}
+
+// An in-dialog question/notice bar (used where a nested modal loop is not possible).
+export component NoticeBar inherits Rectangle {
+    in property <string> text;
+    in property <[string]> buttons;
+    in property <bool> error;
+    callback clicked(int);
+    visible: root.text != "";
+    height: root.text == "" ? 0px : layout.preferred-height;
+    background: root.error ? #d73a4922 : #0366d622;
+    border-radius: 4px;
+    layout := HorizontalBox {
+        Text { text: root.text; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; }
+        for b[i] in root.buttons: Button { text: b; clicked => { root.clicked(i); } }
+    }
+}

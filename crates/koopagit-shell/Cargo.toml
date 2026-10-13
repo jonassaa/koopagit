@@ -1,0 +1,12 @@
+[package]
+name = "koopagit-shell"
+description = "Platform-independent shell-integration logic: context-menu table, ITEMIS flags, overlays."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+koopagit-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

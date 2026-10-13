@@ -1,0 +1,539 @@
+// CSettings: tree-view property sheet (TortoiseProc/Settings/Settings.cpp).
+import { Button, CheckBox, LineEdit, TextEdit, ComboBox, ListView, ScrollView, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys, SpaceActivate } from "keys.slint";
+
+// kind: 0 group, 1 note, 2 check, 3 tri-state, 4 text, 5 multiline, 6 number,
+//       7 combo, 8 radio, 9 button, 10 saved-data clear row, 11 colour
+export struct OptRow {
+    kind: int,
+    label: string,
+    text: string,
+    checked: bool,
+    tri: int,
+    index: int,
+    choices: [string],
+    enabled: bool,
+    inherit-visible: bool,
+    inherited: bool,
+    swatch: color,
+}
+
+export struct TreeRow {
+    label: string,
+    depth: int,
+}
+
+export struct CheckRow {
+    label: string,
+    checked: bool,
+}
+
+export struct KvRow {
+    key: string,
+    value: string,
+}
+
+// Tri-state checkbox: 0 unchecked, 1 checked, 2 indeterminate ("not set").
+// A tab stop; Space cycles it like a click.
+component TriCheck inherits Rectangle {
+    in property <string> text;
+    in property <int> state;
+    in property <bool> enabled: true;
+    callback changed(int);
+    // checked -> unchecked -> indeterminate -> checked
+    function cycle() {
+        root.changed(root.state == 1 ? 0 : root.state == 0 ? 2 : 1);
+    }
+    HorizontalLayout {
+        spacing: 6px;
+        box := Rectangle {
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
+            border-width: 1px;
+            border-radius: 3px;
+            border-color: Palette.border;
+            background: root.state == 1 ? Palette.accent-background : Palette.control-background;
+            opacity: root.enabled ? 1 : 0.5;
+            Text {
+                text: root.state == 1 ? "✓" : root.state == 2 ? "■" : "";
+                color: root.state == 1 ? Palette.accent-foreground : Palette.foreground;
+                font-size: root.state == 2 ? 9px : 12px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.enabled ? Palette.foreground : Palette.foreground.with-alpha(0.5);
+        }
+    }
+    keys := SpaceActivate {
+        enabled: root.enabled;
+        activated => { root.cycle(); }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            keys.focus();
+            root.cycle();
+        }
+    }
+}
+
+// A tab stop; Space selects it.
+component Radio inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <bool> enabled: true;
+    callback clicked();
+    HorizontalLayout {
+        spacing: 6px;
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: Palette.border;
+            background: Palette.control-background;
+            opacity: root.enabled ? 1 : 0.5;
+            Rectangle {
+                visible: root.selected;
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: Palette.accent-background;
+            }
+        }
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.enabled ? Palette.foreground : Palette.foreground.with-alpha(0.5);
+        }
+    }
+    keys := SpaceActivate {
+        enabled: root.enabled;
+        activated => { root.clicked(); }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            keys.focus();
+            root.clicked();
+        }
+    }
+}
+
+export component SettingsDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Settings - KoopaGit";
+    in property <[TreeRow]> tree;
+    in-out property <int> page;
+    in property <string> page-title;
+    in property <bool> stub;
+
+    in property <bool> show-checklist;
+    in property <string> checklist-caption;
+    in property <string> checklist-note;
+    in-out property <[CheckRow]> checklist;
+
+    in property <bool> show-config-source;
+    in property <[string]> scope-labels;
+    in property <[bool]> scope-enabled;
+    in-out property <int> scope-index;
+    in property <[string]> save-to-labels;
+    in-out property <int> save-to-index;
+
+    in property <bool> show-remotes;
+    in property <string> side-caption: "Remote:";
+    in property <float> side-width: 160;
+    in property <[string]> remotes;
+    in-out property <int> remote-index: -1;
+
+    in property <bool> show-advanced;
+    in-out property <[KvRow]> advanced;
+
+    in-out property <[OptRow]> rows;
+    in property <bool> apply-enabled;
+
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+
+    callback page-selected(int);
+    callback opt-text(int, string);
+    callback opt-checked(int, bool);
+    callback opt-tri(int, int);
+    callback opt-index(int, int);
+    callback opt-inherit(int, bool);
+    callback opt-button(int);
+    callback checklist-toggled(int, bool);
+    callback checklist-select-all();
+    callback checklist-restore-default();
+    callback scope-changed(int);
+    callback save-to-changed(int);
+    callback remote-selected(int);
+    callback advanced-edited(int, string);
+    callback notice-clicked(int);
+    callback ok();
+    callback cancel();
+    callback apply();
+
+    title: root.dialog-title;
+    preferred-width: 860px;
+    preferred-height: 640px;
+    min-width: 640px;
+    min-height: 480px;
+
+    function next-page() {
+        if (root.tree.length > 0) {
+            root.page-selected(Math.mod(root.page + 1, root.tree.length));
+        }
+    }
+    function previous-page() {
+        if (root.tree.length > 0) {
+            root.page-selected(Math.mod(root.page - 1 + root.tree.length, root.tree.length));
+        }
+    }
+
+    // The page tree has the focus initially.
+    forward-focus: tree-keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // Property sheet "&Apply" (system caption, inferred). The Context Menu page's
+        // "Select/deselect &all" shares the letter and wins while that page is shown.
+        access-key(k) => {
+            if (k == "a" && root.show-checklist) { root.checklist-select-all(); return true; }
+            if (k == "a") { if (root.apply-enabled) { root.apply(); } return true; }
+            false
+        }
+        // CTreePropSheet: Ctrl+Tab / Ctrl+PgDn next page, Ctrl+Shift+Tab / Ctrl+PgUp
+        // previous page (cycling, as the tree is walked in order).
+        KeyBinding {
+            keys: @keys(Control + Tab);
+            activated => { root.next-page(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + Shift + Tab);
+            activated => { root.previous-page(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + Shift? + Backtab);
+            activated => { root.previous-page(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + PageDown);
+            activated => { root.next-page(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + PageUp);
+            activated => { root.previous-page(); }
+        }
+        VerticalBox {
+            HorizontalLayout {
+                spacing: 8px;
+                vertical-stretch: 1;
+                // The page tree: Up/Down/Home/End move between pages.
+                tree-keys := FocusScope {
+                    width: 220px;
+                    key-pressed(e) => {
+                        if (e.modifiers.control || e.modifiers.alt || e.modifiers.meta) { return reject; }
+                        if (root.tree.length == 0) { return reject; }
+                        if (e.text == Key.UpArrow) { root.page-selected(max(0, root.page - 1)); return accept; }
+                        if (e.text == Key.DownArrow) { root.page-selected(min(root.tree.length - 1, root.page + 1)); return accept; }
+                        if (e.text == Key.Home) { root.page-selected(0); return accept; }
+                        if (e.text == Key.End) { root.page-selected(root.tree.length - 1); return accept; }
+                        reject
+                    }
+                    Rectangle {
+                        border-width: 1px;
+                        border-color: tree-keys.has-focus ? Palette.accent-background : Palette.border;
+                        ListView {
+                            for item[i] in root.tree: Rectangle {
+                                height: 24px;
+                                background: i == root.page ? Palette.selection-background : transparent;
+                                Text {
+                                    x: 8px + item.depth * 16px;
+                                    text: item.label;
+                                    vertical-alignment: center;
+                                    height: parent.height;
+                                    color: i == root.page ? Palette.selection-foreground : Palette.foreground;
+                                }
+                                TouchArea {
+                                    clicked => {
+                                        tree-keys.focus();
+                                        root.page-selected(i);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: root.page-title;
+                        font-size: 16px;
+                        font-weight: 700;
+                    }
+                    NoticeBar {
+                        text: root.notice-text;
+                        buttons: root.notice-buttons;
+                        error: root.notice-error;
+                        clicked(i) => { root.notice-clicked(i); }
+                    }
+                    if root.show-config-source: HorizontalLayout {
+                        spacing: 12px;
+                        Text { text: "Config source:"; vertical-alignment: center; }
+                        for label[i] in root.scope-labels: Radio {
+                            text: label;
+                            selected: i == root.scope-index;
+                            enabled: root.scope-enabled[i];
+                            clicked => {
+                                root.scope-index = i;
+                                root.scope-changed(i);
+                            }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    if root.show-config-source: HorizontalLayout {
+                        spacing: 12px;
+                        Text { text: "Save to:"; vertical-alignment: center; }
+                        ComboBox {
+                            width: 120px;
+                            model: root.save-to-labels;
+                            current-index <=> root.save-to-index;
+                            selected => { root.save-to-changed(self.current-index); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        vertical-stretch: 1;
+                        if root.show-remotes: VerticalLayout {
+                            width: root.side-width * 1px;
+                            spacing: 4px;
+                            Text { text: root.side-caption; }
+                            // A tab stop; Up/Down/Home/End move the selection.
+                            remote-keys := FocusScope {
+                                key-pressed(e) => {
+                                    if (e.modifiers.control || e.modifiers.alt || e.modifiers.meta) { return reject; }
+                                    if (root.remotes.length == 0) { return reject; }
+                                    if (e.text == Key.UpArrow) { root.remote-selected(max(0, root.remote-index - 1)); return accept; }
+                                    if (e.text == Key.DownArrow) { root.remote-selected(min(root.remotes.length - 1, root.remote-index + 1)); return accept; }
+                                    if (e.text == Key.Home) { root.remote-selected(0); return accept; }
+                                    if (e.text == Key.End) { root.remote-selected(root.remotes.length - 1); return accept; }
+                                    reject
+                                }
+                                Rectangle {
+                                    border-width: 1px;
+                                    border-color: remote-keys.has-focus ? Palette.accent-background : Palette.border;
+                                    ListView {
+                                        for r[i] in root.remotes: Rectangle {
+                                            height: 22px;
+                                            background: i == root.remote-index ? Palette.selection-background : transparent;
+                                            Text {
+                                                x: 6px;
+                                                text: r;
+                                                height: parent.height;
+                                                vertical-alignment: center;
+                                                color: i == root.remote-index ? Palette.selection-foreground : Palette.foreground;
+                                            }
+                                            TouchArea {
+                                                clicked => {
+                                                    remote-keys.focus();
+                                                    root.remote-selected(i);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        ScrollView {
+                            VerticalLayout {
+                                spacing: 6px;
+                                alignment: start;
+                                if root.stub: Text {
+                                    text: "Not available in KoopaGit yet.";
+                                    color: Palette.foreground.with-alpha(0.6);
+                                }
+                                if root.show-checklist: VerticalLayout {
+                                    spacing: 4px;
+                                    Text { text: root.checklist-caption; wrap: word-wrap; font-weight: 600; }
+                                    Text { text: root.checklist-note; wrap: word-wrap; }
+                                    Rectangle {
+                                        height: 260px;
+                                        border-width: 1px;
+                                        border-color: Palette.border;
+                                        ListView {
+                                            for c[i] in root.checklist: CheckBox {
+                                                height: 24px;
+                                                text: c.label;
+                                                checked: c.checked;
+                                                toggled => { root.checklist-toggled(i, self.checked); }
+                                            }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+                                        Button { text: "Select/deselect all"; clicked => { root.checklist-select-all(); } }
+                                        Button { text: "Restore Default"; clicked => { root.checklist-restore-default(); } }
+                                    }
+                                }
+                                for row[i] in root.rows: VerticalLayout {
+                                    if row.kind == 0: Text {
+                                        text: row.label;
+                                        font-weight: 700;
+                                    }
+                                    if row.kind == 1: Text {
+                                        text: row.label;
+                                        wrap: word-wrap;
+                                        color: Palette.foreground.with-alpha(0.75);
+                                    }
+                                    if row.kind == 2: CheckBox {
+                                        text: row.label;
+                                        checked: row.checked;
+                                        enabled: row.enabled;
+                                        toggled => { root.opt-checked(i, self.checked); }
+                                    }
+                                    if row.kind == 3: TriCheck {
+                                        text: row.label;
+                                        state: row.tri;
+                                        enabled: row.enabled;
+                                        changed(s) => { root.opt-tri(i, s); }
+                                    }
+                                    if row.kind == 4 || row.kind == 6: HorizontalLayout {
+                                        spacing: 8px;
+                                        if row.label != "": Text {
+                                            text: row.label;
+                                            width: 230px;
+                                            wrap: word-wrap;
+                                            vertical-alignment: center;
+                                        }
+                                        LineEdit {
+                                            text: row.text;
+                                            enabled: row.enabled && !row.inherited;
+                                            input-type: row.kind == 6 ? InputType.number : InputType.text;
+                                            edited(t) => { root.opt-text(i, t); }
+                                            accepted => { root.ok(); }
+                                        }
+                                        if row.inherit-visible: CheckBox {
+                                            width: 90px;
+                                            text: "inherit";
+                                            checked: row.inherited;
+                                            enabled: row.enabled;
+                                            toggled => { root.opt-inherit(i, self.checked); }
+                                        }
+                                    }
+                                    if row.kind == 5: VerticalLayout {
+                                        spacing: 2px;
+                                        Text { text: row.label; }
+                                        TextEdit {
+                                            height: 70px;
+                                            text: row.text;
+                                            enabled: row.enabled;
+                                            edited(t) => { root.opt-text(i, t); }
+                                        }
+                                    }
+                                    if row.kind == 7: HorizontalLayout {
+                                        spacing: 8px;
+                                        Text {
+                                            text: row.label;
+                                            width: 230px;
+                                            wrap: word-wrap;
+                                            vertical-alignment: center;
+                                        }
+                                        ComboBox {
+                                            model: row.choices;
+                                            current-index: row.index;
+                                            enabled: row.enabled;
+                                            selected => { root.opt-index(i, self.current-index); }
+                                        }
+                                    }
+                                    if row.kind == 8: HorizontalLayout {
+                                        spacing: 16px;
+                                        alignment: start;
+                                        for c[j] in row.choices: Radio {
+                                            text: c;
+                                            selected: j == row.index;
+                                            enabled: row.enabled;
+                                            clicked => { root.opt-index(i, j); }
+                                        }
+                                    }
+                                    if row.kind == 9: HorizontalLayout {
+                                        alignment: start;
+                                        Button {
+                                            text: row.label;
+                                            enabled: row.enabled;
+                                            clicked => { root.opt-button(i); }
+                                        }
+                                    }
+                                    if row.kind == 11: HorizontalLayout {
+                                        spacing: 8px;
+                                        Text {
+                                            text: row.label;
+                                            width: 230px;
+                                            wrap: word-wrap;
+                                            vertical-alignment: center;
+                                        }
+                                        Rectangle {
+                                            width: 40px;
+                                            height: 22px;
+                                            border-width: 1px;
+                                            border-color: Palette.border;
+                                            background: row.swatch;
+                                        }
+                                        LineEdit {
+                                            width: 110px;
+                                            text: row.text;
+                                            enabled: row.enabled;
+                                            placeholder-text: "#RRGGBB";
+                                            edited(t) => { root.opt-text(i, t); }
+                                            accepted => { root.ok(); }
+                                        }
+                                    }
+                                    if row.kind == 10: HorizontalLayout {
+                                        spacing: 8px;
+                                        Text { text: row.label; width: 300px; vertical-alignment: center; }
+                                        Text { text: row.text; width: 80px; vertical-alignment: center; }
+                                        Button {
+                                            width: 90px;
+                                            text: "Clear";
+                                            enabled: row.enabled;
+                                            clicked => { root.opt-button(i); }
+                                        }
+                                    }
+                                }
+                                if root.show-advanced: VerticalLayout {
+                                    spacing: 2px;
+                                    for kv[i] in root.advanced: HorizontalLayout {
+                                        spacing: 8px;
+                                        Text { text: kv.key; width: 300px; vertical-alignment: center; overflow: elide; }
+                                        LineEdit {
+                                            text: kv.value;
+                                            edited(t) => { root.advanced-edited(i, t); }
+                                            accepted => { root.ok(); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+                Button { text: "Apply"; enabled: root.apply-enabled; clicked => { root.apply(); } }
+            }
+        }
+    }
+}

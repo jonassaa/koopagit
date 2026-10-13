@@ -1,0 +1,15 @@
+[package]
+name = "koopagit-proc"
+description = "The KoopaGit launcher: TortoiseGitProc-compatible /command: dispatcher with a conventional subcommand CLI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "koopagit-proc"
+path = "src/main.rs"
+
+[dependencies]
+koopagit-core.workspace = true
+koopagit-dialogs.workspace = true
+clap.workspace = true

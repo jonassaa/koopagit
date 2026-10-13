@@ -1,0 +1,403 @@
+// CRebaseDlg (IDD_REBASE, caption "Rebase"; "Cherry Pick" in cherry-pick mode).
+import { Button, CheckBox, LineEdit, TextEdit, VerticalBox, HorizontalBox, ComboBox, ListView, Palette } from "std-widgets.slint";
+import { Colors } from "common.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys, SpaceActivate } from "keys.slint";
+import { KeyMenu } from "remote_widgets.slint";
+
+export struct RebaseRow {
+    action: int, // 0 Pick, 1 Squash, 2 Edit, 3 Skip
+    hash: string,
+    subject: string,
+    author: string,
+    state: int, // 0 pending, 1 current, 2 done
+    selected: bool,
+}
+
+component HeaderCell inherits Text {
+    font-weight: 600;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+component Cell inherits Text {
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component RebaseDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Rebase";
+    in property <bool> cherry-pick;
+    in property <[string]> branches;
+    in property <[string]> upstreams;
+    in-out property <int> branch-index;
+    in-out property <int> upstream-index;
+    in-out property <bool> onto-enabled;
+    in-out property <string> onto-text;
+    in-out property <bool> preserve-merges;
+    in-out property <bool> force;
+    in-out property <bool> add-cherry-picked-from;
+    in property <[RebaseRow]> rows;
+    // The choose-commits stage: actions, order and options can be changed.
+    in property <bool> editable: true;
+    in property <string> status-text;
+    in property <float> progress;
+    in property <string> continue-text: "Start Rebase";
+    in property <bool> continue-enabled: true;
+    in property <bool> skip-visible;
+    in property <string> abort-text: "Abort";
+    in-out property <string> message-text;
+    in property <bool> message-editable;
+    in property <string> output-text;
+    in-out property <int> tab;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback refs-changed();
+    callback swap();
+    callback options-changed();
+    // 0 pick, 1 squash, 2 edit, 3 skip on the selected rows; 4 cycle (Space)
+    callback set-action(int);
+    // Split-button entries: 0 Pick ALL, 1 Squash ALL, 2 Edit ALL,
+    // 3 Skip unselected, 4 Squash unselected, 5 Edit unselected
+    callback set-all(int);
+    // (delta, to-end)
+    callback move-rows(int, bool);
+    callback row-clicked(int, bool, bool);
+    callback row-right(int);
+    callback key-step(int, bool);
+    callback refresh();
+    pure callback menu-for(int) -> [MenuBlock];
+    callback menu-action(int, int);
+    callback go();
+    callback skip();
+    callback abort();
+    callback notice-clicked(int);
+
+    title: root.dialog-title;
+    preferred-width: 860px;
+    preferred-height: 640px;
+    min-width: 600px;
+    min-height: 420px;
+    forward-focus: commit-list;
+
+    // Continue is the default button; Escape is OnCancel, i.e. Abort.
+    keys := DialogKeys {
+        ok-enabled: root.continue-enabled;
+        ok => { root.go(); }
+        cancel => { root.abort(); }
+        // IDD_REBASE captions ("&Add" and "&Edit/Split commit" are not
+        // implemented). Shared letters move the focus between their controls
+        // (Win32 duplicate mnemonics): "&Upstream:" / "&Up", and the split
+        // button's "&Pick ALL" / "&Preserve merges".
+        access-key(k) => {
+            if (k == "b") {
+                if (root.editable && !root.cherry-pick) { branch-combo.focus(); }
+                return true;
+            }
+            if (k == "u") {
+                if (!root.editable) { return true; }
+                if (root.cherry-pick) {
+                    root.move-rows(-1, false);
+                } else if (upstream-combo.has-focus) {
+                    up-button.focus();
+                } else {
+                    upstream-combo.focus();
+                }
+                return true;
+            }
+            if (k == "o") {
+                if (root.editable && !root.cherry-pick) {
+                    root.onto-enabled = !root.onto-enabled;
+                    onto-check.focus();
+                    root.refs-changed();
+                }
+                return true;
+            }
+            if (k == "d") {
+                if (root.editable) { root.move-rows(1, false); }
+                return true;
+            }
+            if (k == "p") {
+                if (!root.editable) { return true; }
+                if (root.cherry-pick) {
+                    all-menu.show();
+                } else if (all-button.has-focus) {
+                    preserve-check.focus();
+                } else {
+                    all-button.focus();
+                }
+                return true;
+            }
+            if (k == "f") {
+                if (root.editable && !root.cherry-pick) {
+                    root.force = !root.force;
+                    force-check.focus();
+                    root.refs-changed();
+                }
+                return true;
+            }
+            if (k == "a") {
+                if (root.editable && root.cherry-pick) {
+                    root.add-cherry-picked-from = !root.add-cherry-picked-from;
+                    cherry-check.focus();
+                    root.options-changed();
+                }
+                return true;
+            }
+            false
+        }
+        // F5 and Ctrl+Enter are handled in CRebaseDlg::PreTranslateMessage,
+        // ahead of the focused control.
+        FocusScope {
+            focus-on-click: false;
+            focus-on-tab-navigation: false;
+            capture-key-pressed(e) => {
+                if (e.text == Key.F5) { root.refresh(); return accept; }
+                if (e.text == Key.Return && e.modifiers.control) {
+                    if (root.continue-enabled) { root.go(); } else { abort-button.focus(); }
+                    return accept;
+                }
+                reject
+            }
+            VerticalBox {
+                // Hidden (not removed) in cherry-pick mode so access keys can reach it.
+                Rectangle {
+                    visible: !root.cherry-pick;
+                    height: root.cherry-pick ? 0px : branch-row.preferred-height;
+                    branch-row := HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Branch:"; vertical-alignment: center; }
+                        branch-combo := ComboBox {
+                            enabled: root.editable && !root.cherry-pick;
+                            model: root.branches;
+                            current-index <=> root.branch-index;
+                            selected => { root.refs-changed(); }
+                        }
+                        Button {
+                            text: "Swap";
+                            enabled: root.editable && !root.cherry-pick;
+                            clicked => { root.swap(); }
+                        }
+                        Text { text: "Upstream:"; vertical-alignment: center; }
+                        upstream-combo := ComboBox {
+                            enabled: root.editable && !root.cherry-pick;
+                            model: root.upstreams;
+                            current-index <=> root.upstream-index;
+                            selected => { root.refs-changed(); }
+                        }
+                        onto-check := CheckBox {
+                            text: "Onto";
+                            enabled: root.editable && !root.cherry-pick;
+                            checked <=> root.onto-enabled;
+                            toggled => { root.refs-changed(); }
+                        }
+                        LineEdit {
+                            enabled: root.editable && root.onto-enabled && !root.cherry-pick;
+                            text <=> root.onto-text;
+                            placeholder-text: "commit or ref";
+                            edited => { root.refs-changed(); }
+                            accepted => { if (root.continue-enabled) { root.go(); } }
+                        }
+                    }
+                }
+                // The commit list. While it has the focus, plain Space/P/S/Q/E/U/D
+                // are list commands (CRebaseDlg::PreTranslateMessage).
+                commit-list := FocusScope {
+                    vertical-stretch: 3;
+                    key-pressed(e) => {
+                        if (e.modifiers.alt || e.modifiers.meta) { return reject; }
+                        if (e.modifiers.control) {
+                            if (e.text.to-lowercase() == "a") { root.key-step(0, false); return accept; }
+                            return reject;
+                        }
+                        if (e.text == Key.UpArrow) { root.key-step(-1, e.modifiers.shift); return accept; }
+                        if (e.text == Key.DownArrow) { root.key-step(1, e.modifiers.shift); return accept; }
+                        if (!root.editable) { return reject; }
+                        if (e.text == " ") { root.set-action(4); return accept; }
+                        let k = e.text.to-lowercase();
+                        if (k == "p") { root.set-action(0); return accept; }
+                        if (k == "s") { root.set-action(3); return accept; }
+                        if (k == "q") { root.set-action(1); return accept; }
+                        if (k == "e") { root.set-action(2); return accept; }
+                        // Shift+U / Shift+D: to the top / bottom.
+                        if (k == "u") { root.move-rows(-1, e.modifiers.shift); return accept; }
+                        if (k == "d") { root.move-rows(1, e.modifiers.shift); return accept; }
+                        reject
+                    }
+                    Rectangle {
+                        border-width: 1px;
+                        border-color: commit-list.has-focus ? Palette.accent-background : #8886;
+                        VerticalLayout {
+                            Rectangle {
+                                height: 22px;
+                                background: Colors.header-bg;
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    spacing: 6px;
+                                    HeaderCell { text: "Action"; width: 70px; }
+                                    HeaderCell { text: "SHA-1"; width: 80px; }
+                                    HeaderCell { text: "Message"; horizontal-stretch: 1; }
+                                    HeaderCell { text: "Author"; width: 140px; }
+                                }
+                            }
+                            ListView {
+                                for row[i] in root.rows: Rectangle {
+                                    height: 22px;
+                                    background: row.selected ? Colors.selection : row.state == 1 ? #e3b34140 : transparent;
+                                    DynMenuArea {
+                                        blocks() => { return root.menu-for(i); }
+                                        chosen(id) => { root.menu-action(i, id); }
+                                        TouchArea {
+                                            double-clicked => { if (root.editable) { root.set-action(4); } }
+                                            pointer-event(e) => {
+                                                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) {
+                                                    commit-list.focus();
+                                                    root.row-clicked(i, e.modifiers.control || e.modifiers.meta, e.modifiers.shift);
+                                                }
+                                                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                                    root.row-right(i);
+                                                    parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                                }
+                                            }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        padding-left: 6px;
+                                        spacing: 6px;
+                                        Cell {
+                                            width: 70px;
+                                            text: row.state == 2 ? "Done" : row.state == 1 ? "Current"
+                                                : row.action == 0 ? "Pick" : row.action == 1 ? "Squash" : row.action == 2 ? "Edit" : "Skip";
+                                            color: row.action == 3 || row.state == 2 ? #8888 : Palette.foreground;
+                                            font-weight: row.state == 1 ? 700 : 400;
+                                        }
+                                        Cell { width: 80px; text: row.hash; font-family: "Menlo"; }
+                                        Cell {
+                                            horizontal-stretch: 1;
+                                            text: row.subject;
+                                            color: row.action == 3 ? #8888 : Palette.foreground;
+                                        }
+                                        Cell { width: 140px; text: row.author; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    all-button := Button {
+                        text: "Pick ALL ▾";
+                        enabled: root.editable;
+                        clicked => { all-menu.show(); }
+                    }
+                    up-button := Button { text: "Up"; enabled: root.editable; clicked => { root.move-rows(-1, false); } }
+                    Button { text: "Down"; enabled: root.editable; clicked => { root.move-rows(1, false); } }
+                    preserve-check := CheckBox {
+                        text: "Preserve merges";
+                        horizontal-stretch: 0;
+                        visible: !root.cherry-pick;
+                        width: root.cherry-pick ? 0px : self.preferred-width;
+                        enabled: root.editable && !root.cherry-pick;
+                        checked <=> root.preserve-merges;
+                        toggled => { root.refs-changed(); }
+                    }
+                    force-check := CheckBox {
+                        text: "Force Rebase";
+                        horizontal-stretch: 0;
+                        visible: !root.cherry-pick;
+                        width: root.cherry-pick ? 0px : self.preferred-width;
+                        enabled: root.editable && !root.cherry-pick;
+                        checked <=> root.force;
+                        toggled => { root.refs-changed(); }
+                    }
+                    cherry-check := CheckBox {
+                        text: "add \"cherry picked from\"";
+                        horizontal-stretch: 0;
+                        visible: root.cherry-pick;
+                        width: root.cherry-pick ? self.preferred-width : 0px;
+                        enabled: root.editable && root.cherry-pick;
+                        checked <=> root.add-cherry-picked-from;
+                        toggled => { root.options-changed(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                // Tabs: Log Message / Log.
+                HorizontalLayout {
+                    spacing: 2px;
+                    for t[k] in ["Log Message", "Log"]: Rectangle {
+                        height: 26px;
+                        width: 120px;
+                        border-radius: 3px;
+                        background: root.tab == k ? Colors.selection : Colors.header-bg;
+                        Text { text: t; horizontal-alignment: center; vertical-alignment: center; }
+                        tab-keys := SpaceActivate { activated => { root.tab = k; } }
+                        TouchArea {
+                            clicked => {
+                                tab-keys.focus();
+                                root.tab = k;
+                            }
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                if root.tab == 0: TextEdit {
+                    vertical-stretch: 2;
+                    text <=> root.message-text;
+                    read-only: !root.message-editable;
+                    wrap: word-wrap;
+                }
+                if root.tab == 1: TextEdit {
+                    vertical-stretch: 2;
+                    text: root.output-text;
+                    read-only: true;
+                    wrap: no-wrap;
+                    font-size: 12px;
+                }
+                Rectangle {
+                    height: 6px;
+                    background: Colors.header-bg;
+                    border-radius: 3px;
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * root.progress;
+                        background: #2f7ed8;
+                        border-radius: 3px;
+                    }
+                }
+                Text { text: root.status-text; wrap: word-wrap; }
+                NoticeBar {
+                    text: root.notice-text;
+                    buttons: root.notice-buttons;
+                    error: root.notice-error;
+                    clicked(i) => { root.notice-clicked(i); }
+                }
+                HorizontalBox {
+                    padding: 0;
+                    alignment: end;
+                    if root.skip-visible: Button { text: "Skip"; clicked => { root.skip(); } }
+                    Button {
+                        text: root.continue-text;
+                        primary: true;
+                        enabled: root.continue-enabled;
+                        clicked => { root.go(); }
+                    }
+                    abort-button := Button { text: root.abort-text; clicked => { root.abort(); } }
+                }
+            }
+        }
+    }
+    // Split-all menu: "&Pick ALL", "&Squash ALL", "&Edit ALL", "S&kip unselected",
+    // "S&quash unselected", "E&dit unselected".
+    all-menu := KeyMenu {
+        x: 12px;
+        y: root.height - 330px;
+        item-width: 170px;
+        entries: ["Pick ALL", "Squash ALL", "Edit ALL", "Skip unselected", "Squash unselected", "Edit unselected"];
+        keys: ["p", "s", "e", "k", "q", "d"];
+        picked(k) => { root.set-all(k); }
+    }
+}

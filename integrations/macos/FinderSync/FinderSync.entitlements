@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Finder Sync extensions must be sandboxed. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- The bundled koopagit-shell reads repositories and ~/.config/koopagit
+	     to compute badges and menus. Development-only exception; a notarised
+	     build would need a different design (see docs/divergences.md). -->
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-only</key>
+	<array>
+		<string>/</string>
+	</array>
+</dict>
+</plist>

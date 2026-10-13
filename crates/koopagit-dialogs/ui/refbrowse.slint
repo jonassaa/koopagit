@@ -1,0 +1,454 @@
+// CRefLogDlg (IDD_REFLOG, caption "RefLog"), CBrowseRefsDlg ("Browse References")
+// and CDeleteRemoteTagDlg ("Delete remote tags").
+import { Button, CheckBox, ComboBox, LineEdit, ListView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Colors } from "common.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+export struct ReflogRow {
+    sha: string,
+    selector: string,
+    action: string,
+    message: string,
+    date: string,
+    selected: bool,
+}
+
+export struct RefRow {
+    name: string,
+    kind: string,
+    date: string,
+    author: string,
+    sha: string,
+    message: string,
+    upstream: string,
+    is-current: bool,
+    selected: bool,
+}
+
+export struct RefTreeRow {
+    label: string,
+    depth: int,
+    has-children: bool,
+    expanded: bool,
+    selected: bool,
+}
+
+export struct RefCheckRow {
+    text: string,
+    checked: bool,
+}
+
+component HeaderCell inherits Text {
+    font-weight: 600;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+component Cell inherits Text {
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// An inline text prompt (rename, description, tracked branch): Slint cannot
+// nest a modal dialog inside another dialog's event loop.
+component InputBar inherits Rectangle {
+    in property <string> label;
+    in-out property <string> text;
+    callback accepted();
+    callback cancelled();
+    visible: root.label != "";
+    height: root.label == "" ? 0px : layout.preferred-height;
+    background: #0366d622;
+    border-radius: 4px;
+    layout := HorizontalBox {
+        Text { text: root.label; vertical-alignment: center; }
+        edit := LineEdit {
+            text <=> root.text;
+            horizontal-stretch: 1;
+            accepted => { root.accepted(); }
+        }
+        Button { text: "OK"; primary: true; clicked => { root.accepted(); } }
+        Button { text: "Cancel"; clicked => { root.cancelled(); } }
+    }
+}
+
+export component RefLogDialog inherits KoopaWindow {
+    in property <string> dialog-title: "RefLog - KoopaGit";
+    in property <[string]> refs;
+    in-out property <int> ref-index;
+    in property <[ReflogRow]> rows;
+    in property <bool> is-stash;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback ref-changed();
+    pure callback menu-for(int) -> [MenuBlock];
+    callback menu-action(int, int);
+    // (row, toggle, range)
+    callback row-clicked(int, bool, bool);
+    callback row-right(int);
+    callback row-activated(int);
+    // (delta, extend) for arrow keys; delta 0 = select all
+    callback key-step(int, bool);
+    callback refresh();
+    callback clear-stash();
+    callback notice-clicked(int);
+    callback ok();
+
+    title: root.dialog-title;
+    preferred-width: 860px;
+    preferred-height: 520px;
+    min-width: 520px;
+    min-height: 320px;
+    forward-focus: keys;
+
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.ok(); }
+        // IDD_REFLOG captions "&Ref:" and "&Clear stash" ("&Search..." has no KoopaGit twin).
+        access-key(k) => {
+            if (k == "r") { ref-combo.focus(); return true; }
+            if (k == "c" && root.is-stash && root.rows.length > 0) { root.clear-stash(); return true; }
+            false
+        }
+        KeyBinding { keys: @keys(F5); activated => { root.refresh(); } }
+        KeyBinding { keys: @keys(Control + A); activated => { root.key-step(0, false); } }
+        KeyBinding { keys: @keys(UpArrow); activated => { root.key-step(-1, false); } }
+        KeyBinding { keys: @keys(Shift + UpArrow); activated => { root.key-step(-1, true); } }
+        KeyBinding { keys: @keys(DownArrow); activated => { root.key-step(1, false); } }
+        KeyBinding { keys: @keys(Shift + DownArrow); activated => { root.key-step(1, true); } }
+        VerticalBox {
+            HorizontalBox {
+                padding: 0;
+                Text { text: "Ref:"; vertical-alignment: center; }
+                ref-combo := ComboBox {
+                    model: root.refs;
+                    current-index <=> root.ref-index;
+                    selected => { root.ref-changed(); }
+                    horizontal-stretch: 1;
+                }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                border-width: 1px;
+                border-color: #8886;
+                VerticalLayout {
+                    Rectangle {
+                        height: 22px;
+                        background: Colors.header-bg;
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            spacing: 6px;
+                            HeaderCell { text: "Hash"; width: 70px; }
+                            HeaderCell { text: "Ref"; width: 140px; }
+                            HeaderCell { text: "Action"; width: 120px; }
+                            HeaderCell { text: "Message"; horizontal-stretch: 1; }
+                            HeaderCell { text: "Date"; width: 120px; }
+                        }
+                    }
+                    ListView {
+                        for row[i] in root.rows: Rectangle {
+                            height: 22px;
+                            background: row.selected ? Colors.selection : transparent;
+                            DynMenuArea {
+                                blocks() => { return root.menu-for(i); }
+                                chosen(id) => { root.menu-action(i, id); }
+                                TouchArea {
+                                    double-clicked => { root.row-activated(i); }
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) {
+                                            keys.focus();
+                                            root.row-clicked(i, e.modifiers.control || e.modifiers.meta, e.modifiers.shift);
+                                        }
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                            root.row-right(i);
+                                            parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                        }
+                                    }
+                                }
+                            }
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                spacing: 6px;
+                                Cell { text: row.sha; width: 70px; }
+                                Cell { text: row.selector; width: 140px; }
+                                Cell { text: row.action; width: 120px; }
+                                Cell { text: row.message; horizontal-stretch: 1; }
+                                Cell { text: row.date; width: 120px; }
+                            }
+                        }
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                if root.is-stash: Button {
+                    text: "Clear stash";
+                    enabled: root.rows.length > 0;
+                    clicked => { root.clear-stash(); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+            }
+        }
+    }
+}
+
+export component BrowseRefsDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Browse References - KoopaGit";
+    in-out property <string> filter-text;
+    in property <[RefTreeRow]> tree;
+    in property <[RefRow]> rows;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    in property <string> input-label;
+    in-out property <string> input-text;
+    callback filter-changed();
+    callback tree-clicked(int);
+    callback tree-toggled(int);
+    pure callback tree-menu-for(int) -> [MenuBlock];
+    callback tree-menu-action(int, int);
+    pure callback menu-for(int) -> [MenuBlock];
+    callback menu-action(int, int);
+    callback row-clicked(int, bool, bool);
+    callback row-right(int);
+    callback row-activated(int);
+    callback key-step(int, bool);
+    callback refresh();
+    callback notice-clicked(int);
+    callback input-accepted();
+    callback input-cancelled();
+    // F2: rename the first selected branch.
+    callback rename-selected();
+    callback ok();
+
+    title: root.dialog-title;
+    preferred-width: 1240px;
+    preferred-height: 580px;
+    min-width: 640px;
+    min-height: 320px;
+    forward-focus: keys;
+
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        // Escape cancels an open prompt, then clears the focused filter, then closes.
+        cancel => {
+            if (root.input-label != "") {
+                root.input-cancelled();
+            } else if (filter-edit.has-focus && root.filter-text != "") {
+                root.filter-text = "";
+                root.filter-changed();
+            } else {
+                root.ok();
+            }
+        }
+        // CBrowseRefsDlg::PreTranslateMessage. F2 renames when the lists have focus.
+        KeyBinding { keys: @keys(F2); activated => { if (keys.has-focus) { root.rename-selected(); } } }
+        KeyBinding { keys: @keys(F5); activated => { root.refresh(); } }
+        KeyBinding {
+            keys: @keys(Control + E);
+            activated => {
+                filter-edit.focus();
+                filter-edit.select-all();
+            }
+        }
+        KeyBinding { keys: @keys(Control + A); activated => { root.key-step(0, false); } }
+        KeyBinding { keys: @keys(UpArrow); activated => { root.key-step(-1, false); } }
+        KeyBinding { keys: @keys(Shift + UpArrow); activated => { root.key-step(-1, true); } }
+        KeyBinding { keys: @keys(DownArrow); activated => { root.key-step(1, false); } }
+        KeyBinding { keys: @keys(Shift + DownArrow); activated => { root.key-step(1, true); } }
+        VerticalBox {
+            HorizontalBox {
+                padding: 0;
+                Text { text: "Filter:"; vertical-alignment: center; }
+                filter-edit := LineEdit {
+                    text <=> root.filter-text;
+                    placeholder-text: "Filter by Refname";
+                    edited => { root.filter-changed(); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                vertical-stretch: 1;
+                // Ref tree (left pane).
+                Rectangle {
+                    width: 220px;
+                    border-width: 1px;
+                    border-color: #8886;
+                    ListView {
+                        for node[i] in root.tree: Rectangle {
+                            height: 22px;
+                            background: node.selected ? Colors.selection : transparent;
+                            DynMenuArea {
+                                blocks() => { return root.tree-menu-for(i); }
+                                chosen(id) => { root.tree-menu-action(i, id); }
+                                TouchArea {
+                                    clicked => { keys.focus(); root.tree-clicked(i); }
+                                    double-clicked => { root.tree-toggled(i); }
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                            root.tree-clicked(i);
+                                            parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                        }
+                                    }
+                                }
+                            }
+                            HorizontalLayout {
+                                padding-left: 4px + node.depth * 14px;
+                                spacing: 2px;
+                                Text {
+                                    width: 14px;
+                                    text: node.has-children ? (node.expanded ? "▾" : "▸") : "";
+                                    vertical-alignment: center;
+                                    TouchArea { clicked => { root.tree-toggled(i); } }
+                                }
+                                Cell { text: node.label; }
+                            }
+                        }
+                    }
+                }
+                // Ref list (right pane).
+                Rectangle {
+                    horizontal-stretch: 1;
+                    border-width: 1px;
+                    border-color: #8886;
+                    VerticalLayout {
+                        Rectangle {
+                            height: 22px;
+                            background: Colors.header-bg;
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                spacing: 6px;
+                                HeaderCell { text: "Ref"; width: 170px; }
+                                HeaderCell { text: "Type"; width: 95px; }
+                                HeaderCell { text: "Last Modified"; width: 120px; }
+                                HeaderCell { text: "Last Author"; width: 100px; }
+                                HeaderCell { text: "Hash"; width: 70px; }
+                                HeaderCell { text: "Message"; horizontal-stretch: 1; }
+                                HeaderCell { text: "Tracked upstream"; width: 115px; }
+                            }
+                        }
+                        ListView {
+                            for row[i] in root.rows: Rectangle {
+                                height: 22px;
+                                background: row.selected ? Colors.selection : transparent;
+                                DynMenuArea {
+                                    blocks() => { return root.menu-for(i); }
+                                    chosen(id) => { root.menu-action(i, id); }
+                                    TouchArea {
+                                        double-clicked => { root.row-activated(i); }
+                                        pointer-event(e) => {
+                                            if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) {
+                                                keys.focus();
+                                                root.row-clicked(i, e.modifiers.control || e.modifiers.meta, e.modifiers.shift);
+                                            }
+                                            if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                                root.row-right(i);
+                                                parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                            }
+                                        }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    spacing: 6px;
+                                    Cell { text: row.name; width: 170px; font-weight: row.is-current ? 700 : 400; }
+                                    Cell { text: row.kind; width: 95px; }
+                                    Cell { text: row.date; width: 120px; }
+                                    Cell { text: row.author; width: 100px; }
+                                    Cell { text: row.sha; width: 70px; }
+                                    Cell { text: row.message; horizontal-stretch: 1; }
+                                    Cell { text: row.upstream; width: 115px; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            InputBar {
+                label: root.input-label;
+                text <=> root.input-text;
+                accepted => { root.input-accepted(); }
+                cancelled => { root.input-cancelled(); }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+            }
+        }
+    }
+}
+
+// CDeleteRemoteTagDlg: tags on a remote, checked ones are deleted on OK.
+export component DeleteRemoteTagDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Delete remote tags";
+    in property <string> remote;
+    in-out property <[RefCheckRow]> tags;
+    in property <string> status-text;
+    callback toggled(int, bool);
+    callback select-all(bool);
+    callback refresh();
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    preferred-width: 460px;
+    preferred-height: 420px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_DELETEREMOTETAG captions: "Select/deselect &all", "&Delete" (IDOK).
+        access-key(k) => {
+            if (k == "a") {
+                select-all-check.checked = !select-all-check.checked;
+                select-all-check.focus();
+                root.select-all(select-all-check.checked);
+                return true;
+            }
+            if (k == "d") { root.ok(); return true; }
+            false
+        }
+        KeyBinding { keys: @keys(F5); activated => { root.refresh(); } }
+        VerticalBox {
+            Text { text: "Tags on \"" + root.remote + "\":"; }
+            Rectangle {
+                vertical-stretch: 1;
+                border-width: 1px;
+                border-color: #8886;
+                ListView {
+                    for t[i] in root.tags: CheckBox {
+                        height: 22px;
+                        text: t.text;
+                        checked: t.checked;
+                        toggled => { root.toggled(i, self.checked); }
+                    }
+                }
+            }
+            Text { text: root.status-text; }
+            HorizontalBox {
+                padding: 0;
+                select-all-check := CheckBox { text: "Select/deselect all"; toggled => { root.select-all(self.checked); } }
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

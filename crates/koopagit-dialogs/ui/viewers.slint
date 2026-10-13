@@ -1,0 +1,497 @@
+// Viewer windows: TortoiseGitMerge (2-way diff, conflict editor),
+// TortoiseGitUDiff (unified diff) and TortoiseGitBlame.
+import { Button, CheckBox, ComboBox, ListView, TextEdit, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { KoopaWindow } from "window.slint";
+
+export global ViewerStyle {
+    in-out property <string> mono: "Menlo";
+    out property <length> row-height: 18px;
+    out property <color> removed-bg: #d73a4930;
+    out property <color> added-bg: #28a74530;
+    out property <color> changed-bg: #e3b34130;
+    out property <color> empty-bg: #8881;
+    out property <color> conflict-bg: #d73a4950;
+    out property <color> resolved-bg: #28a74520;
+    out property <color> header-bg: #0366d630;
+    out property <color> current-border: #0366d6;
+    out property <color> gutter: #8888;
+}
+
+// Accelerators of the viewer windows (docs/spec/spec-keyboard.md §4). Keys are
+// matched as chord strings: `ViewerKeys.chord(e) == "Ctrl+Shift+" + Key.F9`.
+global ViewerKeys {
+    // Exact modifiers + lower-cased key text (Ctrl is ⌘ on macOS).
+    public pure function chord(e: KeyEvent) -> string {
+        (e.modifiers.control ? "Ctrl+" : "") + (e.modifiers.shift ? "Shift+" : "") + (e.modifiers.alt ? "Alt+" : "") + e.text.to-lowercase()
+    }
+    // Upstream these move the Scintilla/TortoiseGitMerge caret. The KoopaGit
+    // views have no caret, so they scroll; Home/End act like Ctrl+Home/End.
+    public pure function scrolls(k: string) -> bool {
+        k == Key.UpArrow || k == Key.DownArrow || k == Key.PageUp || k == Key.PageDown
+            || k == Key.Home || k == Key.End || k == "Ctrl+" + Key.Home || k == "Ctrl+" + Key.End
+    }
+    // New content-y of a scroll view for a key that `scrolls`.
+    public pure function scrolled(k: string, y: length, visible: length, content: length) -> length {
+        max(min(0px, visible - content), min(0px,
+            k == Key.UpArrow ? y + ViewerStyle.row-height
+            : k == Key.DownArrow ? y - ViewerStyle.row-height
+            : k == Key.PageUp ? y + visible
+            : k == Key.PageDown ? y - visible
+            : k == Key.Home || k == "Ctrl+" + Key.Home ? 0px
+            : k == Key.End || k == "Ctrl+" + Key.End ? -content
+            : y))
+    }
+    // TortoiseGitMerge: ID_NAVIGATE_NEXTDIFFERENCE / ID_NAVIGATE_PREVIOUSDIFFERENCE.
+    public pure function next-difference(k: string) -> bool {
+        k == Key.F7 || k == Key.F11 || k == "Ctrl+" + Key.DownArrow || k == "Alt+" + Key.DownArrow
+    }
+    public pure function previous-difference(k: string) -> bool {
+        k == "Shift+" + Key.F7 || k == "Shift+" + Key.F11 || k == "Ctrl+" + Key.F11
+            || k == "Ctrl+" + Key.UpArrow || k == "Alt+" + Key.UpArrow
+    }
+    // TortoiseGitMerge: ID_APP_EXIT.
+    public pure function merge-exit(k: string) -> bool {
+        k == Key.Escape || k == "Ctrl+q" || k == "Ctrl+w"
+    }
+}
+
+component MonoText inherits Text {
+    font-family: ViewerStyle.mono;
+    font-size: 12px;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export struct DiffRow {
+    lno: string,
+    ltext: string,
+    rno: string,
+    rtext: string,
+    // 0 equal, 1 removed (left only), 2 added (right only), 3 changed
+    kind: int,
+}
+
+export component DiffViewer inherits KoopaWindow {
+    in property <string> dialog-title: "KoopaGitMerge";
+    in property <string> left-title;
+    in property <string> right-title;
+    in property <[DiffRow]> rows;
+    in property <string> status-text;
+    in-out property <int> current: -1;
+    in-out property <length> scroll-y;
+    in-out property <int> whitespace;
+    in-out property <bool> ignore-case;
+    in property <bool> can-save;
+    callback next-difference();
+    callback previous-difference();
+    callback options-changed();
+    // Block menus: (row, pane 0 left / 1 right).
+    pure callback pane-menu(int, int) -> [MenuBlock];
+    callback pane-menu-action(int, int, int);
+    callback save();
+    // F12 / Alt+Right: the current difference's left block replaces the right one.
+    callback use-left-block();
+    callback close-viewer();
+
+    title: root.dialog-title;
+    preferred-width: 1100px;
+    preferred-height: 700px;
+    min-width: 600px;
+    min-height: 300px;
+    forward-focus: keys;
+
+    // TortoiseGitMerge IDR_MAINFRAME accelerators that apply to a two-pane diff.
+    // F8/Shift+F8 (conflicts) and the "use mine/theirs" keys only act on the
+    // three-pane view upstream, so they do nothing here.
+    keys := FocusScope {
+        key-pressed(e) => {
+            if (ViewerKeys.next-difference(ViewerKeys.chord(e))) { root.next-difference(); return accept; }
+            if (ViewerKeys.previous-difference(ViewerKeys.chord(e))) { root.previous-difference(); return accept; }
+            // Upstream asks to save first; without that prompt the exit keys
+            // leave unsaved edits alone (use Save or the Close button).
+            if (ViewerKeys.merge-exit(ViewerKeys.chord(e))) {
+                if (!root.can-save) { root.close-viewer(); }
+                return accept;
+            }
+            if (ViewerKeys.chord(e) == "Ctrl+s") {
+                if (root.can-save) { root.save(); }
+                return accept;
+            }
+            if (ViewerKeys.chord(e) == Key.F12 || ViewerKeys.chord(e) == "Alt+" + Key.RightArrow) { root.use-left-block(); return accept; }
+            if (ViewerKeys.scrolls(ViewerKeys.chord(e))) {
+                list.content-y = ViewerKeys.scrolled(ViewerKeys.chord(e), list.content-y, list.visible-height, list.content-height);
+                return accept;
+            }
+            reject
+        }
+        VerticalBox {
+            HorizontalBox {
+                padding: 0;
+                Button { text: "Previous Difference"; clicked => { root.previous-difference(); } }
+                Button { text: "Next Difference"; clicked => { root.next-difference(); } }
+                Text { text: "Whitespaces:"; vertical-alignment: center; }
+                ComboBox {
+                    model: ["Compare whitespaces", "Ignore whitespace changes", "Ignore all whitespaces"];
+                    current-index <=> root.whitespace;
+                    selected => { root.options-changed(); }
+                }
+                CheckBox { text: "Ignore case"; checked <=> root.ignore-case; toggled => { root.options-changed(); } }
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "Save"; enabled: root.can-save; clicked => { root.save(); } }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                Text { text: root.left-title; horizontal-stretch: 1; preferred-width: 0px; min-width: 0px; font-weight: 600; overflow: elide; }
+                Text { text: root.right-title; horizontal-stretch: 1; preferred-width: 0px; min-width: 0px; font-weight: 600; overflow: elide; }
+            }
+            list := ListView {
+                vertical-stretch: 1;
+                content-y <=> root.scroll-y;
+                for row[i] in root.rows: Rectangle {
+                    height: ViewerStyle.row-height;
+                    border-width: i == root.current ? 1px : 0px;
+                    border-color: ViewerStyle.current-border;
+                    HorizontalLayout {
+                        Rectangle {
+                            horizontal-stretch: 1; preferred-width: 0px; min-width: 0px;
+                            background: row.kind == 1 ? ViewerStyle.removed-bg : row.kind == 2 ? ViewerStyle.empty-bg : row.kind == 3 ? ViewerStyle.changed-bg : transparent;
+                            HorizontalLayout {
+                                MonoText { text: row.lno; width: 44px; color: ViewerStyle.gutter; horizontal-alignment: right; }
+                                Rectangle { width: 6px; }
+                                MonoText { text: row.ltext; }
+                            }
+                        }
+                        Rectangle { width: 2px; background: ViewerStyle.gutter; }
+                        Rectangle {
+                            horizontal-stretch: 1; preferred-width: 0px; min-width: 0px;
+                            background: row.kind == 2 ? ViewerStyle.added-bg : row.kind == 1 ? ViewerStyle.empty-bg : row.kind == 3 ? ViewerStyle.changed-bg : transparent;
+                            HorizontalLayout {
+                                MonoText { text: row.rno; width: 44px; color: ViewerStyle.gutter; horizontal-alignment: right; }
+                                Rectangle { width: 6px; }
+                                MonoText { text: row.rtext; }
+                            }
+                        }
+                    }
+                    // Per-pane context menus (TortoiseGitMerge left/right view menus).
+                    DynMenuArea {
+                        x: 0;
+                        width: parent.width / 2;
+                        blocks() => { return root.pane-menu(i, 0); }
+                        chosen(id) => { root.pane-menu-action(i, 0, id); }
+                    }
+                    DynMenuArea {
+                        x: parent.width / 2;
+                        width: parent.width / 2;
+                        blocks() => { return root.pane-menu(i, 1); }
+                        chosen(id) => { root.pane-menu-action(i, 1, id); }
+                    }
+                }
+            }
+            Text { text: root.status-text; }
+        }
+    }
+}
+
+export struct ConflictRow {
+    ltext: string,
+    rtext: string,
+    // 0 common, 1 conflict line, 2 block header
+    kind: int,
+    block: int,
+    resolved: bool,
+    header: string,
+}
+
+export component ConflictViewer inherits KoopaWindow {
+    in property <string> dialog-title: "KoopaGitMerge";
+    in property <string> left-title: "Theirs";
+    in property <string> right-title: "Mine";
+    in property <string> merged-title: "Merged";
+    in property <[ConflictRow]> rows;
+    in property <string> merged-text;
+    in property <string> status-text;
+    in property <bool> can-save;
+    // Some conflict has a choice that is not saved yet.
+    in property <bool> modified;
+    in-out property <int> current-block: -1;
+    in-out property <length> scroll-y;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback next-conflict();
+    callback previous-conflict();
+    // 1 mine, 2 theirs, 3 mine then theirs, 4 theirs then mine, 0 unresolve
+    callback choose(int, int);
+    callback save();
+    callback close-viewer();
+    // Block menus: (row, pane 0 theirs / 1 mine / 2 merged; row -1 for merged).
+    pure callback pane-menu(int, int) -> [MenuBlock];
+    callback pane-menu-action(int, int, int);
+
+    title: root.dialog-title;
+    preferred-width: 1100px;
+    preferred-height: 760px;
+    min-width: 640px;
+    min-height: 400px;
+    forward-focus: keys;
+
+    // TortoiseGitMerge IDR_MAINFRAME accelerators for the three-pane view. Every
+    // difference KoopaGit shows here is a conflict block, so the "difference"
+    // keys walk the conflicts too. F12/Alt+Right (use left block) is disabled
+    // upstream in this mode (the right view is not the target).
+    keys := FocusScope {
+        key-pressed(e) => {
+            if (ViewerKeys.next-difference(ViewerKeys.chord(e)) || ViewerKeys.chord(e) == Key.F8) { root.next-conflict(); return accept; }
+            if (ViewerKeys.previous-difference(ViewerKeys.chord(e)) || ViewerKeys.chord(e) == "Shift+" + Key.F8) { root.previous-conflict(); return accept; }
+            if (ViewerKeys.merge-exit(ViewerKeys.chord(e))) {
+                if (!root.modified) { root.close-viewer(); }
+                return accept;
+            }
+            if (ViewerKeys.chord(e) == "Ctrl+s") {
+                if (root.can-save) { root.save(); }
+                return accept;
+            }
+            // ID_EDIT_USETHEIRBLOCK, ID_EDIT_USEMYBLOCK, ID_EDIT_USETHEIRTHENMYBLOCK,
+            // ID_EDIT_USEMINETHENTHEIRBLOCK: act on the current block.
+            if (ViewerKeys.chord(e) == "Ctrl+" + Key.F9) { root.choose-current(2); return accept; }
+            if (ViewerKeys.chord(e) == "Shift+" + Key.F12 || ViewerKeys.chord(e) == "Ctrl+" + Key.F10) { root.choose-current(1); return accept; }
+            if (ViewerKeys.chord(e) == "Ctrl+Shift+" + Key.F9) { root.choose-current(4); return accept; }
+            if (ViewerKeys.chord(e) == "Ctrl+Shift+" + Key.F10) { root.choose-current(3); return accept; }
+            if (ViewerKeys.scrolls(ViewerKeys.chord(e))) {
+                list.content-y = ViewerKeys.scrolled(ViewerKeys.chord(e), list.content-y, list.visible-height, list.content-height);
+                return accept;
+            }
+            reject
+        }
+
+        VerticalBox {
+            HorizontalBox {
+                padding: 0;
+                Button { text: "Previous Conflict"; clicked => { root.previous-conflict(); } }
+                Button { text: "Next Conflict"; clicked => { root.next-conflict(); } }
+                Button { text: "Use 'theirs' text block"; enabled: root.current-block >= 0; clicked => { root.choose(root.current-block, 2); } }
+                Button { text: "Use 'mine' text block"; enabled: root.current-block >= 0; clicked => { root.choose(root.current-block, 1); } }
+                Button { text: "Use 'mine' before 'theirs'"; enabled: root.current-block >= 0; clicked => { root.choose(root.current-block, 3); } }
+                Button { text: "Use 'theirs' before 'mine'"; enabled: root.current-block >= 0; clicked => { root.choose(root.current-block, 4); } }
+                Rectangle { horizontal-stretch: 1; }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                Text { text: root.left-title; horizontal-stretch: 1; preferred-width: 0px; min-width: 0px; font-weight: 600; overflow: elide; }
+                Text { text: root.right-title; horizontal-stretch: 1; preferred-width: 0px; min-width: 0px; font-weight: 600; overflow: elide; }
+            }
+            list := ListView {
+                vertical-stretch: 3;
+                content-y <=> root.scroll-y;
+                for row[i] in root.rows: Rectangle {
+                    height: ViewerStyle.row-height;
+                    background: row.kind == 2 ? ViewerStyle.header-bg : row.kind == 1 ? (row.resolved ? ViewerStyle.resolved-bg : ViewerStyle.conflict-bg) : transparent;
+                    border-width: row.kind != 0 && row.block == root.current-block ? 1px : 0px;
+                    border-color: ViewerStyle.current-border;
+                    TouchArea { clicked => { if (row.kind != 0) { root.current-block = row.block; } } }
+                    if row.kind == 2: MonoText { x: 6px; text: row.header; font-weight: 600; }
+                    if row.kind != 2: HorizontalLayout {
+                        MonoText { text: row.ltext; horizontal-stretch: 1; preferred-width: 0px; min-width: 0px; }
+                        Rectangle { width: 2px; background: ViewerStyle.gutter; }
+                        Rectangle { width: 6px; }
+                        MonoText { text: row.rtext; horizontal-stretch: 1; preferred-width: 0px; min-width: 0px; }
+                    }
+                    DynMenuArea {
+                        x: 0;
+                        width: parent.width / 2;
+                        blocks() => { return root.pane-menu(i, 0); }
+                        chosen(id) => { root.pane-menu-action(i, 0, id); }
+                    }
+                    DynMenuArea {
+                        x: parent.width / 2;
+                        width: parent.width / 2;
+                        blocks() => { return root.pane-menu(i, 1); }
+                        chosen(id) => { root.pane-menu-action(i, 1, id); }
+                    }
+                }
+            }
+            Text { text: root.merged-title; font-weight: 600; }
+            DynMenuArea {
+                vertical-stretch: 2;
+                blocks() => { return root.pane-menu(-1, 2); }
+                chosen(id) => { root.pane-menu-action(-1, 2, id); }
+                TextEdit {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.merged-text;
+                    read-only: true;
+                    font-size: 12px;
+                    wrap: no-wrap;
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                Text { text: root.status-text; vertical-alignment: center; horizontal-stretch: 1; }
+                Button { text: "Save"; primary: true; enabled: root.can-save; clicked => { root.save(); } }
+                Button { text: "Close"; clicked => { root.close-viewer(); } }
+            }
+        }
+    }
+
+    function choose-current(which: int) {
+        if (root.current-block >= 0) { root.choose(root.current-block, which); }
+    }
+}
+
+export struct UDiffLine {
+    text: string,
+    // 0 context, 1 added, 2 removed, 3 hunk header, 4 file header
+    kind: int,
+}
+
+export component UDiffViewer inherits KoopaWindow {
+    in property <string> dialog-title: "KoopaGitUDiff";
+    in property <[UDiffLine]> lines;
+    in property <string> status-text;
+    callback close-viewer();
+    title: root.dialog-title;
+    preferred-width: 900px;
+    preferred-height: 640px;
+    min-width: 400px;
+    min-height: 240px;
+    forward-focus: keys;
+
+    // TortoiseUDiff IDC_TORTOISEUDIFF accelerators. There is no find bar, so
+    // Escape always exits.
+    keys := FocusScope {
+        key-pressed(e) => {
+            if (ViewerKeys.chord(e) == Key.Escape || ViewerKeys.chord(e) == "Ctrl+w") { root.close-viewer(); return accept; }
+            if (ViewerKeys.scrolls(ViewerKeys.chord(e))) {
+                list.content-y = ViewerKeys.scrolled(ViewerKeys.chord(e), list.content-y, list.visible-height, list.content-height);
+                return accept;
+            }
+            reject
+        }
+
+        VerticalBox {
+            list := ListView {
+                vertical-stretch: 1;
+                for line in root.lines: Rectangle {
+                    height: ViewerStyle.row-height;
+                    background: line.kind == 1 ? ViewerStyle.added-bg : line.kind == 2 ? ViewerStyle.removed-bg : line.kind == 3 ? ViewerStyle.header-bg : transparent;
+                    MonoText {
+                        x: 6px;
+                        width: parent.width - 12px;
+                        text: line.text;
+                        font-weight: line.kind == 4 ? 700 : 400;
+                        color: line.kind == 3 ? #6f42c1 : Palette.foreground;
+                    }
+                }
+            }
+            Text { text: root.status-text; }
+        }
+    }
+}
+
+export struct BlameRow {
+    line-no: string,
+    commit: string,
+    author: string,
+    date: string,
+    text: string,
+    // Alternating group shading per commit run.
+    shade: bool,
+    first-of-group: bool,
+}
+
+export component BlameViewer inherits KoopaWindow {
+    in property <string> dialog-title: "KoopaGitBlame";
+    in property <[BlameRow]> rows;
+    in property <string> status-text;
+    in-out property <int> current: -1;
+    callback activated(int);
+    callback selected(int);
+    pure callback line-menu(int) -> [MenuBlock];
+    callback line-menu-action(int, int);
+    // Ctrl+C: the current line is KoopaGit's text selection.
+    callback copy();
+    callback close-viewer();
+    title: root.dialog-title;
+    preferred-width: 1100px;
+    preferred-height: 720px;
+    min-width: 500px;
+    min-height: 240px;
+    forward-focus: keys;
+
+    // IDR_TORTOISE_GIT_BLAME_MAINFRAME accelerators. The caret keys move the
+    // current line, which stands in for the Scintilla caret.
+    keys := FocusScope {
+        key-pressed(e) => {
+            if (ViewerKeys.chord(e) == Key.Escape || ViewerKeys.chord(e) == "Ctrl+q") { root.close-viewer(); return accept; }
+            if (ViewerKeys.chord(e) == "Ctrl+c" || ViewerKeys.chord(e) == "Ctrl+" + Key.Insert) { root.copy(); return accept; }
+            if (ViewerKeys.chord(e) == Key.UpArrow) { root.go-to(root.current - 1); return accept; }
+            if (ViewerKeys.chord(e) == Key.DownArrow) { root.go-to(root.current + 1); return accept; }
+            if (ViewerKeys.chord(e) == Key.PageUp) { root.go-to(root.current - root.page()); return accept; }
+            if (ViewerKeys.chord(e) == Key.PageDown) { root.go-to(root.current + root.page()); return accept; }
+            if (ViewerKeys.chord(e) == Key.Home || ViewerKeys.chord(e) == "Ctrl+" + Key.Home) { root.go-to(0); return accept; }
+            if (ViewerKeys.chord(e) == Key.End || ViewerKeys.chord(e) == "Ctrl+" + Key.End) { root.go-to(root.rows.length - 1); return accept; }
+            reject
+        }
+
+        VerticalBox {
+            list := ListView {
+                vertical-stretch: 1;
+                for row[i] in root.rows: Rectangle {
+                    height: ViewerStyle.row-height;
+                    background: i == root.current ? #0366d633 : row.shade ? ViewerStyle.empty-bg : transparent;
+                    DynMenuArea {
+                        blocks() => { return root.line-menu(i); }
+                        chosen(id) => { root.line-menu-action(i, id); }
+                        TouchArea {
+                            clicked => { root.current = i; root.selected(i); }
+                            double-clicked => { root.current = i; root.activated(i); }
+                            pointer-event(e) => {
+                                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                    root.current = i;
+                                    root.selected(i);
+                                    parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        padding-left: 4px;
+                        MonoText { text: row.first-of-group ? row.commit : ""; width: 70px; color: #0366d6; }
+                        MonoText { text: row.first-of-group ? row.author : ""; width: 140px; }
+                        MonoText { text: row.first-of-group ? row.date : ""; width: 120px; color: ViewerStyle.gutter; }
+                        MonoText { text: row.line-no; width: 44px; horizontal-alignment: right; color: ViewerStyle.gutter; }
+                        Rectangle { width: 1px; background: ViewerStyle.gutter; }
+                        MonoText { text: row.text; horizontal-stretch: 1; min-width: 0px; }
+                    }
+                }
+            }
+            Text { text: root.status-text; wrap: word-wrap; }
+        }
+    }
+
+    pure function page() -> int {
+        max(1, floor(list.visible-height / ViewerStyle.row-height))
+    }
+
+    // Makes line `i` (clamped) current and scrolls it into view.
+    function go-to(i: int) {
+        if (root.rows.length == 0) { return; }
+        root.current = max(0, min(root.rows.length - 1, i));
+        root.selected(root.current);
+        if (root.current * ViewerStyle.row-height < -list.content-y) {
+            list.content-y = -root.current * ViewerStyle.row-height;
+        } else if ((root.current + 1) * ViewerStyle.row-height > list.visible-height - list.content-y) {
+            list.content-y = list.visible-height - (root.current + 1) * ViewerStyle.row-height;
+        }
+    }
+}

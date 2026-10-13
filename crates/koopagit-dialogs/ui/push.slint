@@ -1,0 +1,225 @@
+// CPushDlg (IDD_PUSH): caption "Push".
+import { Button, CheckBox, ComboBox, GroupBox, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { EditCombo } from "remote_widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DialogKeys } from "keys.slint";
+import { Radio } from "choose.slint";
+import { KoopaWindow } from "window.slint";
+
+export component PushDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Push";
+    // Ref
+    in-out property <bool> all-branches;
+    in-out property <string> local;
+    in property <[string]> local-items;
+    in-out property <string> remote-branch;
+    in property <[string]> remote-branch-items;
+    // Destination
+    in-out property <bool> use-url;
+    in property <[string]> remotes;
+    in-out property <int> remote-index;
+    in-out property <string> url;
+    in property <[string]> url-items;
+    // Options
+    in-out property <bool> force-with-lease;
+    in-out property <bool> force;
+    in-out property <bool> tags;
+    in-out property <bool> set-upstream;
+    in-out property <bool> always-remote;
+    in-out property <bool> always-branch;
+    // "Always push..." need a single named remote and a local branch.
+    in property <bool> has-all-entry;
+    out property <bool> always-enabled: !root.all-branches && !root.use-url && root.local != ""
+        && !(root.has-all-entry && root.remote-index == 0);
+    in-out property <int> recurse-submodules;
+    in-out property <string> push-option;
+    in property <[string]> push-option-items;
+    // Notice bar
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback local-changed();
+    callback manage();
+    // F5: reload the branch and remote lists.
+    callback refresh();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 600px;
+    min-width: 480px;
+    forward-focus: keys;
+
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_PUSH captions (Autoload Putty Key is not implemented).
+        access-key(k) => {
+            if (k == "p") { root.all-branches = !root.all-branches; all-check.focus(); return true; }
+            if (k == "l") { if (local-combo.enabled) { local-combo.focus(); } return true; }
+            if (k == "r") { if (remote-branch-combo.enabled) { remote-branch-combo.focus(); } return true; }
+            if (k == "m") { root.use-url = false; remote-radio.take-focus(); return true; }
+            if (k == "g") { root.manage(); return true; }
+            if (k == "u") { root.use-url = true; url-radio.take-focus(); return true; }
+            if (k == "w") {
+                if (lease-check.enabled) { root.force-with-lease = !root.force-with-lease; lease-check.focus(); }
+                return true;
+            }
+            if (k == "f") {
+                if (force-check.enabled) { root.force = !root.force; force-check.focus(); }
+                return true;
+            }
+            if (k == "t") {
+                if (tags-check.enabled) { root.tags = !root.tags; tags-check.focus(); }
+                return true;
+            }
+            if (k == "s") {
+                if (upstream-check.enabled) { root.set-upstream = !root.set-upstream; upstream-check.focus(); }
+                return true;
+            }
+            if (k == "o") { option-combo.focus(); return true; }
+            false
+        }
+        KeyBinding {
+            keys: @keys(F5);
+            activated => { root.refresh(); }
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Ref";
+                VerticalLayout {
+                    spacing: 6px;
+                    all-check := CheckBox { text: "Push all branches"; checked <=> root.all-branches; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Local:"; width: 70px; vertical-alignment: center; }
+                        local-combo := EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.local;
+                            items: root.local-items;
+                            enabled: !root.all-branches;
+                            edited => { root.local-changed(); }
+                            selected => { root.local-changed(); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Remote:"; width: 70px; vertical-alignment: center; }
+                        remote-branch-combo := EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.remote-branch;
+                            items: root.remote-branch-items;
+                            enabled: !root.all-branches;
+                        }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Destination";
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        remote-radio := Radio {
+                            text: "Remote:";
+                            width: 110px;
+                            checked: !root.use-url;
+                            clicked => { root.use-url = false; }
+                        }
+                        ComboBox {
+                            model: root.remotes;
+                            current-index <=> root.remote-index;
+                            enabled: !root.use-url;
+                        }
+                        Button { text: "Manage"; clicked => { root.manage(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        url-radio := Radio {
+                            text: "Arbitrary URL:";
+                            width: 110px;
+                            checked: root.use-url;
+                            clicked => { root.use-url = true; }
+                        }
+                        EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.url;
+                            items: root.url-items;
+                            enabled: root.use-url;
+                        }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Options";
+                VerticalLayout {
+                    spacing: 4px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        lease-check := CheckBox {
+                            text: "Force with lease";
+                            enabled: !root.force && !root.tags;
+                            checked <=> root.force-with-lease;
+                        }
+                        force-check := CheckBox {
+                            text: "Force";
+                            enabled: !root.force-with-lease;
+                            checked <=> root.force;
+                        }
+                        tags-check := CheckBox {
+                            text: "Include Tags";
+                            enabled: !root.force-with-lease;
+                            checked <=> root.tags;
+                        }
+                    }
+                    upstream-check := CheckBox {
+                        text: "Set upstream/track remote branch";
+                        enabled: !root.use-url && !root.always-remote && !root.always-branch
+                            && (root.local != "" || root.all-branches);
+                        checked <=> root.set-upstream;
+                    }
+                    CheckBox {
+                        text: "Always push to the selected remote archive for this local branch";
+                        enabled: root.always-enabled && !root.set-upstream;
+                        checked <=> root.always-remote;
+                    }
+                    CheckBox {
+                        text: "Always push to the selected remote branch for this local branch";
+                        enabled: root.always-enabled && !root.set-upstream;
+                        checked <=> root.always-branch;
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Recurse submodule"; vertical-alignment: center; }
+                        ComboBox {
+                            model: ["None", "Check", "On demand"];
+                            current-index <=> root.recurse-submodules;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Push option:"; vertical-alignment: center; }
+                        option-combo := EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.push-option;
+                            items: root.push-option-items;
+                        }
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

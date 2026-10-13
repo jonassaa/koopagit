@@ -1,0 +1,84 @@
+// CProgressDlg: runs one or more git commands, streams their output and offers
+// post-command buttons (TortoiseProc/ProgressDlg.cpp).
+import { Button, TextEdit, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { DialogKeys } from "keys.slint";
+import { KoopaWindow } from "window.slint";
+
+export component ProgressDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Git command progress";
+    in property <string> output;
+    in property <string> status-text;
+    in property <bool> running: true;
+    in property <bool> failed;
+    in property <[string]> post-actions;
+    // Lower-case `&` access letter per post-command button ("" for none).
+    in property <[string]> post-keys;
+    callback post-action(int);
+    callback abort();
+    callback close-dialog();
+
+    title: root.dialog-title;
+    preferred-width: 640px;
+    preferred-height: 420px;
+    min-width: 400px;
+    min-height: 240px;
+    forward-focus: keys;
+
+    // The first post-command button with access key `k`, or -1. Upstream opens
+    // the drop-down on a shared letter; here the first button wins.
+    function post-index(k: string) -> int {
+        if (root.post-keys[0] == k) { return 0; }
+        if (root.post-keys[1] == k) { return 1; }
+        if (root.post-keys[2] == k) { return 2; }
+        if (root.post-keys[3] == k) { return 3; }
+        if (root.post-keys[4] == k) { return 4; }
+        if (root.post-keys[5] == k) { return 5; }
+        if (root.post-keys[6] == k) { return 6; }
+        if (root.post-keys[7] == k) { return 7; }
+        -1
+    }
+
+    // Escape and Enter do nothing while git runs (Abort is the way out); after
+    // that both press Close.
+    keys := DialogKeys {
+        ok-enabled: !root.running;
+        cancel-enabled: !root.running;
+        ok => { root.close-dialog(); }
+        cancel => { root.close-dialog(); }
+        access-key(k) => {
+            if (root.running) { return false; }
+            let i = root.post-index(k);
+            if (i >= 0) { root.post-action(i); return true; }
+            false
+        }
+        VerticalBox {
+            TextEdit {
+                text: root.output;
+                read-only: true;
+                wrap: no-wrap;
+                font-size: 12px;
+                vertical-stretch: 1;
+            }
+            Text {
+                text: root.status-text;
+                color: root.failed ? #c42b1c : #2e7d32;
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                for label[i] in root.post-actions : Button {
+                    text: label;
+                    enabled: !root.running;
+                    clicked => { root.post-action(i); }
+                }
+                Button {
+                    text: root.running ? "Abort" : "Close";
+                    primary: !root.running;
+                    clicked => {
+                        if (root.running) { root.abort(); } else { root.close-dialog(); }
+                    }
+                }
+            }
+        }
+    }
+}

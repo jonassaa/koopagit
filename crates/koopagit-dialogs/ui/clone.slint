@@ -1,0 +1,122 @@
+// CCloneDlg (IDD_CLONE): caption "Git clone - KoopaGit".
+import { Button, CheckBox, GroupBox, LineEdit, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { EditCombo } from "remote_widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DialogKeys } from "keys.slint";
+import { KoopaWindow } from "window.slint";
+
+export component CloneDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Git clone - KoopaGit";
+    in-out property <string> url;
+    in property <[string]> url-items;
+    in-out property <string> directory;
+    in-out property <bool> use-depth;
+    in-out property <string> depth: "1";
+    in-out property <bool> recursive;
+    in-out property <bool> bare;
+    in-out property <bool> no-checkout;
+    in-out property <bool> use-branch;
+    in-out property <string> branch;
+    in-out property <bool> use-origin;
+    in-out property <string> origin;
+    in property <string> notice-text;
+    in property <bool> notice-error;
+    callback url-changed(string);
+    callback browse-directory();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 600px;
+    min-width: 480px;
+    forward-focus: url-combo;
+
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_CLONE: "&URL:", "&Directory:", "Bro&wse..." (the SVN, Putty key and
+        // URL browse controls are not implemented).
+        access-key(k) => {
+            if (k == "u") { url-combo.focus(); return true; }
+            if (k == "d") { dir-edit.focus(); return true; }
+            if (k == "w") { root.browse-directory(); return true; }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Clone Existing Repository";
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "URL:"; width: 80px; vertical-alignment: center; }
+                        url-combo := EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.url;
+                            items: root.url-items;
+                            edited(t) => { root.url-changed(t); }
+                            selected(t) => { root.url-changed(t); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Directory:"; width: 80px; vertical-alignment: center; }
+                        dir-edit := LineEdit { text <=> root.directory; accepted => { root.ok(); } }
+                        Button { text: "Browse..."; clicked => { root.browse-directory(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        HorizontalLayout {
+                            spacing: 4px;
+                            CheckBox { text: "Depth"; checked <=> root.use-depth; }
+                            LineEdit { text <=> root.depth; width: 60px; enabled: root.use-depth; accepted => { root.ok(); } }
+                        }
+                        CheckBox {
+                            text: "Recursive";
+                            enabled: !root.bare;
+                            checked <=> root.recursive;
+                        }
+                        CheckBox {
+                            text: "Clone into Bare Repo";
+                            checked <=> root.bare;
+                            toggled => {
+                                if (self.checked) {
+                                    root.recursive = false;
+                                    root.no-checkout = false;
+                                    root.use-origin = false;
+                                }
+                            }
+                        }
+                        CheckBox {
+                            text: "No Checkout";
+                            enabled: !root.bare;
+                            checked <=> root.no-checkout;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        CheckBox { text: "Branch"; width: 110px; checked <=> root.use-branch; }
+                        LineEdit { text <=> root.branch; enabled: root.use-branch; accepted => { root.ok(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        CheckBox {
+                            text: "Origin Name";
+                            width: 110px;
+                            enabled: !root.bare;
+                            checked <=> root.use-origin;
+                        }
+                        LineEdit { text <=> root.origin; enabled: root.use-origin && !root.bare; accepted => { root.ok(); } }
+                    }
+                }
+            }
+            NoticeBar { text: root.notice-text; error: root.notice-error; }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

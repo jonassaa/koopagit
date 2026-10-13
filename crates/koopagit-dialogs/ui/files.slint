@@ -1,0 +1,642 @@
+// File-operation dialogs: Add, Revert, Resolve (shared file-list dialog), Clean,
+// Ignore, Working Tree (Check for modifications), Git Init and a simple input box.
+import { Button, CheckBox, LineEdit, GroupBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { FileList, FileRow, LinkLabel } from "common.slint";
+import { Radio } from "choose.slint";
+import { NoticeBar } from "msgbox.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+// IDD_ADD / IDD_REVERT / IDD_RESOLVE.
+export component FileListDialog inherits KoopaWindow {
+    in property <string> dialog-title;
+    in-out property <[FileRow]> rows;
+    in property <bool> show-numstat: true;
+    in property <string> empty-text;
+    in property <string> extra-check-text;
+    in-out property <bool> extra-checked;
+    in property <string> note-text;
+    in property <string> stats-text;
+    callback select-all(bool);
+    callback row-toggled(int, bool);
+    callback row-activated(int);
+    callback extra-toggled();
+    // F5 and file-list menu actions reload the list.
+    callback refresh();
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    preferred-width: 640px;
+    preferred-height: 440px;
+    min-width: 420px;
+    min-height: 280px;
+    forward-focus: list;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // "Select/deselect &all"; Add's "Include &ignored files".
+        access-key(k) => {
+            if (k == "a") {
+                all-check.checked = !all-check.checked;
+                root.select-all(all-check.checked);
+                all-check.focus();
+                return true;
+            }
+            if (k == "i" && root.extra-check-text != "") {
+                root.extra-checked = !root.extra-checked;
+                root.extra-toggled();
+                return true;
+            }
+            false
+        }
+        FocusScope {
+            focus-on-click: false;
+            focus-on-tab-navigation: false;
+            // CAddDlg / CRevertDlg / CResolveDlg::PreTranslateMessage: Ctrl+Enter is OK
+            // ahead of the focused control.
+            capture-key-pressed(e) => {
+                if (e.text == Key.Return && e.modifiers.control && !e.modifiers.alt) {
+                    root.ok();
+                    return accept;
+                }
+                reject
+            }
+            key-pressed(e) => {
+                if (e.text == Key.F5 && !e.modifiers.control && !e.modifiers.alt && !e.modifiers.meta) {
+                    root.refresh();
+                    return accept;
+                }
+                reject
+            }
+            VerticalBox {
+                list := FileList {
+                    vertical-stretch: 1;
+                    rows <=> root.rows;
+                    show-numstat: root.show-numstat;
+                    list-id: 0;
+                    menu-enabled: true;
+                    toggled(i, c) => {
+                        root.row-toggled(i, c);
+                    }
+                    activated(i) => {
+                        root.row-activated(i);
+                    }
+                    if root.rows.length == 0: Text {
+                        text: root.empty-text;
+                        width: parent.width;
+                        height: parent.height;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                        color: #888;
+                    }
+                }
+                if root.note-text != "": Text {
+                    text: root.note-text;
+                }
+                HorizontalBox {
+                    padding: 0;
+                    all-check := CheckBox {
+                        text: "Select/deselect all";
+                        toggled => {
+                            root.select-all(self.checked);
+                        }
+                    }
+                    if root.extra-check-text != "": CheckBox {
+                        text: root.extra-check-text;
+                        checked <=> root.extra-checked;
+                        toggled => {
+                            root.extra-toggled();
+                        }
+                    }
+                    Text {
+                        text: root.stats-text;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: "OK";
+                        primary: true;
+                        clicked => {
+                            root.ok();
+                        }
+                    }
+                    Button {
+                        text: "Cancel";
+                        clicked => {
+                            root.cancel();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// IDD_CLEAN "Clean".
+export component CleanDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Clean";
+    in-out property <int> clean-type;
+    in-out property <bool> directories: true;
+    in-out property <bool> nested-repos;
+    in-out property <bool> no-recycle;
+    in-out property <bool> dry-run;
+    in-out property <bool> submodules;
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 460px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        access-key(k) => {
+            // "Remove &all untracked files (-fx)", "Remove &non-ignored untracked files (-f)".
+            if (k == "a") { root.clean-type = 0; all-radio.take-focus(); return true; }
+            if (k == "n") { root.clean-type = 1; non-ignored-radio.take-focus(); return true; }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Clean Type";
+                VerticalLayout {
+                    spacing: 6px;
+                    all-radio := Radio {
+                        text: "Remove all untracked files (-fx)";
+                        checked: root.clean-type == 0;
+                        clicked => {
+                            root.clean-type = 0;
+                        }
+                    }
+                    non-ignored-radio := Radio {
+                        text: "Remove non-ignored untracked files (-f)";
+                        checked: root.clean-type == 1;
+                        clicked => {
+                            root.clean-type = 1;
+                        }
+                    }
+                    Radio {
+                        text: "Remove ignored files (-fX)";
+                        checked: root.clean-type == 2;
+                        clicked => {
+                            root.clean-type = 2;
+                        }
+                    }
+                }
+            }
+            CheckBox {
+                text: "Remove untracked directories (-d)";
+                checked <=> root.directories;
+            }
+            HorizontalLayout {
+                padding-left: 24px;
+                CheckBox {
+                    text: "Remove unmanaged directories with .git folder (-f)";
+                    enabled: root.directories;
+                    checked <=> root.nested-repos;
+                }
+            }
+            CheckBox {
+                text: "Do not use recycle bin";
+                checked <=> root.no-recycle;
+            }
+            CheckBox {
+                text: "Dry run";
+                checked <=> root.dry-run;
+            }
+            CheckBox {
+                text: "Submodules";
+                checked <=> root.submodules;
+            }
+            Text {
+                text: "Attention: This command affects the whole working tree!";
+                font-weight: 600;
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button {
+                    text: "OK";
+                    primary: true;
+                    clicked => {
+                        root.ok();
+                    }
+                }
+                Button {
+                    text: "Cancel";
+                    clicked => {
+                        root.cancel();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// IDD_IGNORE "Ignore".
+export component IgnoreDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Ignore";
+    in-out property <int> ignore-type;
+    in-out property <int> ignore-file;
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 440px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        VerticalBox {
+            GroupBox {
+                title: "Ignore Type";
+                VerticalLayout {
+                    spacing: 6px;
+                    Radio {
+                        text: "Ignore item(s) only in the containing folder(s)";
+                        checked: root.ignore-type == 0;
+                        clicked => {
+                            root.ignore-type = 0;
+                        }
+                    }
+                    Radio {
+                        text: "Ignore item(s) recursively";
+                        checked: root.ignore-type == 1;
+                        clicked => {
+                            root.ignore-type = 1;
+                        }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Ignore File";
+                VerticalLayout {
+                    spacing: 6px;
+                    Radio {
+                        text: ".gitignore in the repository root";
+                        checked: root.ignore-file == 0;
+                        clicked => {
+                            root.ignore-file = 0;
+                        }
+                    }
+                    Radio {
+                        text: ".gitignore in the containing directories of the items";
+                        checked: root.ignore-file == 1;
+                        clicked => {
+                            root.ignore-file = 1;
+                        }
+                    }
+                    Radio {
+                        text: ".git/info/exclude";
+                        checked: root.ignore-file == 2;
+                        clicked => {
+                            root.ignore-file = 2;
+                        }
+                    }
+                }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button {
+                    text: "OK";
+                    primary: true;
+                    clicked => {
+                        root.ok();
+                    }
+                }
+                Button {
+                    text: "Cancel";
+                    clicked => {
+                        root.cancel();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// IDD_CHANGEDFILES "Working Tree" (Check for modifications).
+export component WorkingTreeDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Working Tree";
+    in property <string> branch;
+    in-out property <[FileRow]> rows;
+    in-out property <bool> show-unversioned: true;
+    in-out property <bool> show-ignored;
+    in-out property <bool> show-staged: true;
+    in-out property <bool> whole-project;
+    in property <bool> filters-enabled: true;
+    in property <string> summary-text;
+    callback branch-clicked();
+    callback row-activated(int);
+    callback refresh();
+    callback stash(int);
+    callback commit();
+    callback save-diff();
+    callback close-dialog();
+    title: root.dialog-title;
+    preferred-width: 760px;
+    preferred-height: 500px;
+    min-width: 520px;
+    min-height: 320px;
+    forward-focus: list;
+    keys := DialogKeys {
+        ok => { root.close-dialog(); }
+        cancel => { root.close-dialog(); }
+        // IDD_CHANGEDFILES: "Show un&versioned files", "Show i&gnored files",
+        // "Show all &staged files", "Show &Whole Project", "&Refresh".
+        access-key(k) => {
+            if (k == "v") {
+                if (root.filters-enabled) {
+                    root.show-unversioned = !root.show-unversioned;
+                    root.refresh();
+                    unversioned-check.focus();
+                }
+                return true;
+            }
+            if (k == "g") {
+                if (root.filters-enabled) {
+                    root.show-ignored = !root.show-ignored;
+                    root.refresh();
+                    ignored-check.focus();
+                }
+                return true;
+            }
+            if (k == "s") {
+                root.show-staged = !root.show-staged;
+                root.refresh();
+                staged-check.focus();
+                return true;
+            }
+            if (k == "w") {
+                root.whole-project = !root.whole-project;
+                root.refresh();
+                whole-check.focus();
+                return true;
+            }
+            if (k == "r") { root.refresh(); return true; }
+            false
+        }
+        FocusScope {
+            focus-on-click: false;
+            focus-on-tab-navigation: false;
+            // CChangedDlg::PreTranslateMessage: F5 refreshes.
+            key-pressed(e) => {
+                if (e.text == Key.F5 && !e.modifiers.control && !e.modifiers.alt && !e.modifiers.meta) {
+                    root.refresh();
+                    return accept;
+                }
+                reject
+            }
+            VerticalBox {
+                HorizontalLayout {
+                    alignment: start;
+                    LinkLabel {
+                        text: root.branch;
+                        clicked => {
+                            root.branch-clicked();
+                        }
+                    }
+                }
+                list := FileList {
+                    vertical-stretch: 1;
+                    checkable: false;
+                    rows <=> root.rows;
+                    list-id: 0;
+                    menu-enabled: true;
+                    activated(i) => {
+                        root.row-activated(i);
+                    }
+                    if root.rows.length == 0: Text {
+                        text: "No files to show with the current setting.\nCheck one or more settings below to see unversioned, ignored and/or unmodified files.";
+                        width: parent.width;
+                        height: parent.height;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                        color: #888;
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 12px;
+                    unversioned-check := CheckBox {
+                        text: "Show unversioned files";
+                        enabled: root.filters-enabled;
+                        checked <=> root.show-unversioned;
+                        toggled => {
+                            root.refresh();
+                        }
+                    }
+                    ignored-check := CheckBox {
+                        text: "Show ignored files";
+                        enabled: root.filters-enabled;
+                        checked <=> root.show-ignored;
+                        toggled => {
+                            root.refresh();
+                        }
+                    }
+                    staged-check := CheckBox {
+                        text: "Show all staged files";
+                        checked <=> root.show-staged;
+                        toggled => {
+                            root.refresh();
+                        }
+                    }
+                    whole-check := CheckBox {
+                        text: "Show Whole Project";
+                        checked <=> root.whole-project;
+                        toggled => {
+                            root.refresh();
+                        }
+                    }
+                }
+                Text {
+                    text: root.summary-text;
+                }
+                HorizontalBox {
+                    padding: 0;
+                    Button {
+                        text: "Save unified diff";
+                        clicked => {
+                            root.save-diff();
+                        }
+                    }
+                    Button {
+                        text: "Stash ▾";
+                        clicked => {
+                            stash-menu.show();
+                        }
+                    }
+                    Rectangle {
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: "Commit";
+                        clicked => {
+                            root.commit();
+                        }
+                    }
+                    Button {
+                        text: "Refresh";
+                        clicked => {
+                            root.refresh();
+                        }
+                    }
+                    Button {
+                        text: "OK";
+                        primary: true;
+                        clicked => {
+                            root.close-dialog();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    stash-menu := PopupWindow {
+        x: 120px;
+        y: root.height - 150px;
+        Rectangle {
+            background: #ffffff;
+            border-width: 1px;
+            border-color: #888;
+            VerticalLayout {
+                padding: 4px;
+                for label[i] in ["Stash changes", "Stash Pop", "Stash Apply", "Stash List"]: Rectangle {
+                    height: 24px;
+                    width: 150px;
+                    Text {
+                        text: label;
+                        color: #000;
+                        x: 6px;
+                        vertical-alignment: center;
+                        height: parent.height;
+                    }
+                    TouchArea {
+                        clicked => {
+                            root.stash(i);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// IDD_CREATEREPO "Git Init".
+export component CreateRepoDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Git Init";
+    in-out property <bool> bare;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    callback notice-clicked(int);
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 460px;
+    preferred-width: 500px;
+    max-width: 640px;
+    min-height: 190px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        VerticalBox {
+            CheckBox {
+                text: "Make it Bare (No working directories)";
+                checked <=> root.bare;
+            }
+            Text {
+                text: "If you plan to work inside this folder, leave this unchecked. Typically a bare repo can only have changes 'pushed' to it. (By convention, a bare repo folder should have a name that ends with '.git')";
+                wrap: word-wrap;
+            }
+            Rectangle {
+                vertical-stretch: 1;
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                clicked(i) => {
+                    root.notice-clicked(i);
+                }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button {
+                    text: "OK";
+                    primary: true;
+                    clicked => {
+                        root.ok();
+                    }
+                }
+                Button {
+                    text: "Cancel";
+                    clicked => {
+                        root.cancel();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// CInputDlg / CRenameDlg: one labelled edit box.
+export component InputDialog inherits KoopaWindow {
+    in property <string> dialog-title;
+    in property <string> label;
+    in-out property <string> value;
+    in property <string> notice-text;
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 440px;
+    forward-focus: edit;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        FocusScope {
+            focus-on-click: false;
+            focus-on-tab-navigation: false;
+            // CInputDlg::PreTranslateMessage: Ctrl+Enter is OK from any control.
+            capture-key-pressed(e) => {
+                if (e.text == Key.Return && e.modifiers.control && !e.modifiers.alt) {
+                    root.ok();
+                    return accept;
+                }
+                reject
+            }
+            VerticalBox {
+                Text {
+                    text: root.label;
+                }
+                edit := LineEdit {
+                    text <=> root.value;
+                    accepted => {
+                        root.ok();
+                    }
+                }
+                NoticeBar {
+                    text: root.notice-text;
+                    error: true;
+                }
+                HorizontalBox {
+                    padding: 0;
+                    alignment: end;
+                    Button {
+                        text: "OK";
+                        primary: true;
+                        clicked => {
+                            root.ok();
+                        }
+                    }
+                    Button {
+                        text: "Cancel";
+                        clicked => {
+                            root.cancel();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

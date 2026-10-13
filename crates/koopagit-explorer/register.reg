@@ -1,0 +1,92 @@
+Windows Registry Editor Version 5.00
+
+; KoopaGit Explorer extension. Replace the DLL path if installed elsewhere.
+; Requires admin (HKLM). Restart Explorer afterwards. Unverified template.
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}]
+@="KoopaGit context menu"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_CLASSES_ROOT\*\shellex\ContextMenuHandlers\koopagit]
+@="{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\koopagit]
+@="{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\koopagit]
+@="{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\koopagit]
+@="{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved]
+"{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}"="KoopaGit context menu"
+
+; Overlay handlers, in priority order (Conflict ... Unversioned). The leading
+; spaces sort them early; Explorer only loads the first 15 handlers overall.
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f01-6b4c-4d1f-9a2e-7c0d3b1e4a01}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit1Conflict]
+@="{5e1a8f01-6b4c-4d1f-9a2e-7c0d3b1e4a01}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f02-6b4c-4d1f-9a2e-7c0d3b1e4a02}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit2Modified]
+@="{5e1a8f02-6b4c-4d1f-9a2e-7c0d3b1e4a02}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f03-6b4c-4d1f-9a2e-7c0d3b1e4a03}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit3Deleted]
+@="{5e1a8f03-6b4c-4d1f-9a2e-7c0d3b1e4a03}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f04-6b4c-4d1f-9a2e-7c0d3b1e4a04}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit4ReadOnly]
+@="{5e1a8f04-6b4c-4d1f-9a2e-7c0d3b1e4a04}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f05-6b4c-4d1f-9a2e-7c0d3b1e4a05}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit5Locked]
+@="{5e1a8f05-6b4c-4d1f-9a2e-7c0d3b1e4a05}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f06-6b4c-4d1f-9a2e-7c0d3b1e4a06}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit6Added]
+@="{5e1a8f06-6b4c-4d1f-9a2e-7c0d3b1e4a06}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f07-6b4c-4d1f-9a2e-7c0d3b1e4a07}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit7Normal]
+@="{5e1a8f07-6b4c-4d1f-9a2e-7c0d3b1e4a07}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f08-6b4c-4d1f-9a2e-7c0d3b1e4a08}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit8Ignored]
+@="{5e1a8f08-6b4c-4d1f-9a2e-7c0d3b1e4a08}"
+
+[HKEY_CLASSES_ROOT\CLSID\{5e1a8f09-6b4c-4d1f-9a2e-7c0d3b1e4a09}\InprocServer32]
+@="C:\\Program Files\\KoopaGit\\koopagit_explorer.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit9Unversioned]
+@="{5e1a8f09-6b4c-4d1f-9a2e-7c0d3b1e4a09}"

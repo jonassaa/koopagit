@@ -1,0 +1,217 @@
+// CPullFetchDlg (IDD_PULLFETCH): caption "Pull" or "Fetch".
+import { Button, CheckBox, ComboBox, GroupBox, LineEdit, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { EditCombo, TriCheck } from "remote_widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DialogKeys, SpaceActivate } from "keys.slint";
+import { Radio } from "choose.slint";
+import { KoopaWindow } from "window.slint";
+
+export component PullFetchDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Pull";
+    in property <bool> is-fetch;
+    // Remote
+    in-out property <bool> use-url;
+    in property <[string]> remotes;
+    in-out property <int> remote-index;
+    in-out property <string> url;
+    in property <[string]> url-items;
+    in-out property <string> remote-branch;
+    in property <[string]> remote-branch-items;
+    in property <bool> remote-branch-enabled: true;
+    // Options
+    in-out property <bool> squash;
+    in-out property <bool> no-commit;
+    in property <bool> show-depth;
+    in-out property <bool> use-depth;
+    in-out property <string> depth: "1";
+    in-out property <bool> no-ff;
+    in-out property <bool> ff-only;
+    in-out property <int> tags: 2;
+    in property <string> tags-default;
+    in-out property <int> prune: 2;
+    in property <string> prune-default;
+    in-out property <bool> rebase;
+    in property <bool> rebase-locked;
+    in property <bool> rebase-enabled: true;
+    // Notice bar
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback remote-changed();
+    callback manage();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 560px;
+    min-width: 460px;
+    forward-focus: keys;
+
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_PULLFETCH captions (AutoLoad Putty Key is not implemented).
+        access-key(k) => {
+            if (k == "r") { root.use-url = false; root.remote-changed(); remote-radio.take-focus(); return true; }
+            if (k == "u") { root.use-url = true; root.remote-changed(); url-radio.take-focus(); return true; }
+            if (k == "b") { if (branch-combo.enabled) { branch-combo.focus(); } return true; }
+            if (k == "s") {
+                if (squash-check.enabled) { root.squash = !root.squash; squash-check.focus(); }
+                return true;
+            }
+            if (k == "f") {
+                if (noff-check.enabled) { root.no-ff = !root.no-ff; noff-check.focus(); }
+                return true;
+            }
+            if (k == "m") {
+                if (nocommit-check.enabled) { root.no-commit = !root.no-commit; nocommit-check.focus(); }
+                return true;
+            }
+            if (k == "n") {
+                if (ffonly-check.enabled) { root.ff-only = !root.ff-only; ffonly-check.focus(); }
+                return true;
+            }
+            if (k == "l") {
+                if (rebase-check.enabled) { root.rebase = !root.rebase; rebase-check.focus(); }
+                return true;
+            }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Remote";
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        remote-radio := Radio {
+                            text: "Remote:";
+                            width: 120px;
+                            checked: !root.use-url;
+                            clicked => { root.use-url = false; root.remote-changed(); }
+                        }
+                        ComboBox {
+                            model: root.remotes;
+                            current-index <=> root.remote-index;
+                            enabled: !root.use-url;
+                            selected => { root.remote-changed(); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        url-radio := Radio {
+                            text: "Arbitrary URL:";
+                            width: 120px;
+                            checked: root.use-url;
+                            clicked => { root.use-url = true; root.remote-changed(); }
+                        }
+                        EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.url;
+                            items: root.url-items;
+                            enabled: root.use-url;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "Remote Branch:"; width: 120px; vertical-alignment: center; }
+                        branch-combo := EditCombo {
+                            accepted => { root.ok(); }
+                            text <=> root.remote-branch;
+                            items: root.remote-branch-items;
+                            enabled: root.remote-branch-enabled;
+                        }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Options";
+                VerticalLayout {
+                    spacing: 4px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        squash-check := CheckBox {
+                            text: "Squash";
+                            enabled: !root.is-fetch;
+                            checked <=> root.squash;
+                        }
+                        nocommit-check := CheckBox {
+                            text: "No Commit";
+                            enabled: !root.is-fetch;
+                            checked <=> root.no-commit;
+                        }
+                        if root.show-depth: HorizontalLayout {
+                            spacing: 4px;
+                            CheckBox { text: "Depth"; checked <=> root.use-depth; }
+                            LineEdit { text <=> root.depth; width: 60px; enabled: root.use-depth; accepted => { root.ok(); } }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        noff-check := CheckBox {
+                            text: "No Fast Forward";
+                            enabled: !root.is-fetch && !root.ff-only;
+                            checked <=> root.no-ff;
+                        }
+                        ffonly-check := CheckBox {
+                            text: "Fast Forward Only";
+                            enabled: !root.is-fetch && !root.no-ff;
+                            checked <=> root.ff-only;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        TriCheck { text: "Tags"; state <=> root.tags; width: 120px; }
+                        Text { text: root.tags-default; vertical-alignment: center; color: #888; }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        TriCheck { text: "Prune"; state <=> root.prune; width: 120px; }
+                        Text { text: root.prune-default; vertical-alignment: center; color: #888; }
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                Text {
+                    text: "Manage Remotes";
+                    color: #0366d6;
+                    vertical-alignment: center;
+                    // CLinkControl: a tab stop that Space or Enter activates.
+                    manage-link := SpaceActivate {
+                        activated => { root.manage(); }
+                        KeyBinding {
+                            keys: @keys(Return);
+                            activated => { root.manage(); }
+                        }
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            manage-link.focus();
+                            root.manage();
+                        }
+                    }
+                }
+                rebase-check := CheckBox {
+                    text: "Launch Rebase After Fetch";
+                    enabled: root.rebase-enabled && !root.rebase-locked && !root.use-url;
+                    checked <=> root.rebase;
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

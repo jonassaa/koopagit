@@ -1,0 +1,325 @@
+// CSyncDlg (IDD_SYNC): caption "Git Synchronization".
+import { Button, CheckBox, ComboBox, LineEdit, ListView, TabWidget, TextEdit, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { EditCombo, KeyMenu } from "remote_widgets.slint";
+import { DialogKeys } from "keys.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { FileList, FileRow } from "common.slint";
+import { KoopaWindow } from "window.slint";
+
+export struct SyncCommit {
+    id: string,
+    subject: string,
+    author: string,
+    date: string,
+    selected: bool,
+}
+
+component CommitList inherits Rectangle {
+    in property <[SyncCommit]> commits;
+    in property <string> empty-text;
+    // Same multi-selection and context menu as the log list.
+    callback pressed(int, bool, bool);
+    pure callback menu(int) -> [MenuBlock];
+    callback chosen(int, int);
+    border-width: 1px;
+    border-color: #8886;
+    VerticalLayout {
+        Rectangle {
+            height: 22px;
+            background: #8882;
+            HorizontalLayout {
+                padding-left: 6px;
+                spacing: 6px;
+                Text { text: "SHA-1"; width: 80px; font-weight: 600; vertical-alignment: center; }
+                Text { text: "Message"; horizontal-stretch: 1; font-weight: 600; vertical-alignment: center; }
+                Text { text: "Author"; width: 120px; font-weight: 600; vertical-alignment: center; }
+                Text { text: "Date"; width: 130px; font-weight: 600; vertical-alignment: center; }
+            }
+        }
+        if root.commits.length == 0: Text {
+            text: root.empty-text;
+            color: #888;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            vertical-stretch: 1;
+        }
+        if root.commits.length > 0: ListView {
+            for c[i] in root.commits: Rectangle {
+                height: 22px;
+                background: c.selected ? #0366d633 : transparent;
+                DynMenuArea {
+                    blocks() => { return root.menu(i); }
+                    chosen(id) => { root.chosen(i, id); }
+                    TouchArea {
+                        pointer-event(e) => {
+                            if (e.button == PointerEventButton.left && e.kind == PointerEventKind.down) {
+                                root.pressed(i, e.modifiers.control || e.modifiers.meta, e.modifiers.shift);
+                            }
+                            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) {
+                                parent.show({ x: self.mouse-x, y: self.mouse-y });
+                            }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    padding-left: 6px;
+                    spacing: 6px;
+                    Text { text: c.id; width: 80px; vertical-alignment: center; font-family: "monospace"; }
+                    Text { text: c.subject; horizontal-stretch: 1; vertical-alignment: center; overflow: elide; }
+                    Text { text: c.author; width: 120px; vertical-alignment: center; overflow: elide; }
+                    Text { text: c.date; width: 130px; vertical-alignment: center; }
+                }
+            }
+        }
+    }
+}
+
+export component SyncDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Git Synchronization";
+    in property <[string]> local-branches;
+    in-out property <int> local-index;
+    in-out property <string> remote-branch;
+    in property <[string]> remote-branch-items;
+    in-out property <string> url;
+    in property <[string]> url-items;
+    in-out property <bool> force;
+    in property <string> output;
+    in property <[SyncCommit]> in-commits;
+    in property <[SyncCommit]> out-commits;
+    // In/Out ChangeList tabs (CGitStatusListCtrl m_In/OutChangeFileList).
+    in property <[FileRow]> in-files;
+    in property <[FileRow]> out-files;
+    callback file-activated(int, int);
+    in property <string> out-summary;
+    in property <bool> running;
+    in property <[string]> pull-entries;
+    // Lower-case `&` access letter per entry ("" for none): the button's
+    // mnemonic is the one of the entry it currently shows.
+    in property <[string]> pull-keys;
+    in-out property <int> pull-choice;
+    in property <[string]> push-entries;
+    in property <[string]> push-keys;
+    in-out property <int> push-choice;
+    in-out property <int> current-tab;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    // In/Out Commits lists: 0 = incoming, 1 = outgoing.
+    callback commit-pressed(int, int, bool, bool);
+    pure callback commit-menu(int, int) -> [MenuBlock];
+    callback commit-action(int, int, int);
+    callback refs-changed();
+    callback pull();
+    callback push();
+    callback manage();
+    callback show-log();
+    callback commit();
+    callback close-dialog();
+
+    title: root.dialog-title;
+    preferred-width: 760px;
+    preferred-height: 560px;
+    min-width: 600px;
+    min-height: 420px;
+    forward-focus: keys;
+
+    // Close is IDOK: Enter and Escape close, but not while git runs (Sync has
+    // no abort).
+    keys := DialogKeys {
+        ok-enabled: !root.running;
+        cancel-enabled: !root.running;
+        ok => { root.close-dialog(); }
+        cancel => { root.close-dialog(); }
+        // IDD_SYNC captions. Shared letters move the focus between their controls
+        // (Win32 duplicate mnemonics): "&Local Branch:" / "Show &log", and
+        // "Fetc&h" / "Pus&h".
+        access-key(k) => {
+            let pull-key = root.pull-keys[root.pull-choice];
+            let push-key = root.push-keys[root.push-choice];
+            if (k == "l") {
+                if (local-combo.has-focus) { log-button.focus(); } else { local-combo.focus(); }
+                return true;
+            }
+            if (k == pull-key && k == push-key) {
+                if (pull-button.has-focus) { push-button.focus(); } else { pull-button.focus(); }
+                return true;
+            }
+            if (k == pull-key) { if (!root.running) { root.pull(); } return true; }
+            if (k == push-key) { if (!root.running) { root.push(); } return true; }
+            if (k == "r") { remote-branch-combo.focus(); return true; }
+            if (k == "u") { url-combo.focus(); return true; }
+            if (k == "f") { root.force = !root.force; force-check.focus(); return true; }
+            if (k == "c") { root.commit(); return true; }
+            false
+        }
+        KeyBinding {
+            keys: @keys(F5);
+            activated => {
+                if (!root.running) { root.refs-changed(); }
+            }
+        }
+        VerticalBox {
+            HorizontalLayout {
+                spacing: 6px;
+                Text { text: "Local Branch:"; width: 100px; vertical-alignment: center; }
+                local-combo := ComboBox {
+                    model: root.local-branches;
+                    current-index <=> root.local-index;
+                    selected => { root.refs-changed(); }
+                }
+                Text { text: "Remote Branch:"; vertical-alignment: center; }
+                // m_bWantReturn: Enter stays in the Remote Branch and URL combos.
+                remote-branch-combo := EditCombo {
+                    want-return: true;
+                    text <=> root.remote-branch;
+                    items: root.remote-branch-items;
+                    edited => { root.refs-changed(); }
+                    selected => { root.refs-changed(); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                Text { text: "Remote URL:"; width: 100px; vertical-alignment: center; }
+                url-combo := EditCombo {
+                    want-return: true;
+                    text <=> root.url;
+                    items: root.url-items;
+                    selected => { root.refs-changed(); }
+                }
+                Button { text: "Manage"; clicked => { root.manage(); } }
+                force-check := CheckBox { text: "Force"; checked <=> root.force; }
+            }
+            TabWidget {
+                vertical-stretch: 1;
+                current-index <=> root.current-tab;
+                Tab {
+                    title: "Log";
+                    TextEdit {
+                        text: root.output;
+                        read-only: true;
+                        wrap: no-wrap;
+                        font-size: 12px;
+                    }
+                }
+                Tab {
+                    title: "In Commits";
+                    CommitList {
+                        commits: root.in-commits;
+                        empty-text: "No incoming commits";
+                        pressed(i, t, r) => { root.commit-pressed(0, i, t, r); }
+                        menu(i) => { return root.commit-menu(0, i); }
+                        chosen(i, id) => { root.commit-action(0, i, id); }
+                    }
+                }
+                Tab {
+                    title: "In ChangeList";
+                    FileList {
+                        rows: root.in-files;
+                        checkable: false;
+                        list-id: 1;
+                        menu-enabled: true;
+                        activated(i) => { root.file-activated(0, i); }
+                    }
+                }
+                Tab {
+                    title: "Out Commits";
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text { text: root.out-summary; }
+                        CommitList {
+                            commits: root.out-commits;
+                            empty-text: "No outgoing commits";
+                            pressed(i, t, r) => { root.commit-pressed(1, i, t, r); }
+                            menu(i) => { return root.commit-menu(1, i); }
+                            chosen(i, id) => { root.commit-action(1, i, id); }
+                        }
+                    }
+                }
+                Tab {
+                    title: "Out ChangeList";
+                    FileList {
+                        rows: root.out-files;
+                        checkable: false;
+                        list-id: 2;
+                        menu-enabled: true;
+                        activated(i) => { root.file-activated(1, i); }
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                // CMenuButton: F4 opens the drop-down.
+                FocusScope {
+                    focus-on-click: false;
+                    focus-on-tab-navigation: false;
+                    KeyBinding {
+                        keys: @keys(F4);
+                        activated => { if (!root.running) { pull-menu.show(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 1px;
+                        pull-button := Button {
+                            text: root.pull-entries[root.pull-choice];
+                            enabled: !root.running;
+                            clicked => { root.pull(); }
+                        }
+                        Button {
+                            text: "▾";
+                            width: 28px;
+                            enabled: !root.running;
+                            clicked => { pull-menu.show(); }
+                        }
+                    }
+                }
+                FocusScope {
+                    focus-on-click: false;
+                    focus-on-tab-navigation: false;
+                    KeyBinding {
+                        keys: @keys(F4);
+                        activated => { if (!root.running) { push-menu.show(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 1px;
+                        push-button := Button {
+                            text: root.push-entries[root.push-choice];
+                            enabled: !root.running;
+                            clicked => { root.push(); }
+                        }
+                        Button {
+                            text: "▾";
+                            width: 28px;
+                            enabled: !root.running;
+                            clicked => { push-menu.show(); }
+                        }
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                log-button := Button { text: "Show log"; clicked => { root.show-log(); } }
+                Button { text: "Commit"; clicked => { root.commit(); } }
+                Button { text: "Close"; enabled: !root.running; clicked => { root.close-dialog(); } }
+            }
+        }
+    }
+    pull-menu := KeyMenu {
+        x: 12px;
+        y: root.height - 220px;
+        entries: root.pull-entries;
+        keys: root.pull-keys;
+        picked(i) => { root.pull-choice = i; }
+    }
+    push-menu := KeyMenu {
+        x: 140px;
+        y: root.height - 110px;
+        entries: root.push-entries;
+        keys: root.push-keys;
+        picked(i) => { root.push-choice = i; }
+    }
+}

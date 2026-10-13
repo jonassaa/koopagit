@@ -1,0 +1,14 @@
+[package]
+name = "koopagit-merge"
+description = "koopagit's TortoiseGitMerge: side-by-side diff, conflict editor and patch viewer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "koopagit-merge"
+path = "src/main.rs"
+
+[dependencies]
+koopagit-core.workspace = true
+koopagit-dialogs.workspace = true

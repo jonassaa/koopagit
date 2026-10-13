@@ -1,0 +1,227 @@
+// Shared widgets: the GitStatusListCtrl-like file list.
+import { CheckBox, ListView, Palette } from "std-widgets.slint";
+import { MenuBlock, DynMenuArea } from "dynmenu.slint";
+import { SpaceActivate } from "keys.slint";
+
+export struct FileRow {
+    checked: bool,
+    // Part of the multi-row selection (`selection.rs`).
+    selected: bool,
+    path: string,
+    extension: string,
+    status: string,
+    added: string,
+    removed: string,
+    // Colour class: 0 normal, 1 added, 2 deleted/missing, 3 modified, 4 conflict, 5 renamed, 6 unversioned
+    kind: int,
+}
+
+export global Colors {
+    out property <color> added: #6f42c1;
+    out property <color> deleted: #b31d28;
+    out property <color> modified: #005cc5;
+    out property <color> conflict: #d73a49;
+    out property <color> renamed: #22863a;
+    out property <color> muted: #6a737d;
+    out property <color> header-bg: #8882;
+    out property <color> selection: #0366d633;
+    out property <color> diff-add: #28a74533;
+    out property <color> diff-del: #d73a4933;
+    out property <color> diff-hunk: #0366d622;
+}
+
+// Routes every FileList's mouse, keyboard and context-menu events to Rust
+// (`filelist_actions::FileListMenu::install`); `list` is the FileList's `list-id`.
+export global FileListBridge {
+    callback pressed(int, int, bool, bool);
+    callback right-pressed(int, int, bool);
+    pure callback menu(int, int) -> [MenuBlock];
+    callback chosen(int, int, int);
+    // key codes: 0 up, 1 down, 2 select all, 3 home, 4 end; returns the new current row
+    callback key(int, int, bool) -> int;
+    // Enter: runs the dialog's activation on every selected row; false = not
+    // handled, and the list activates its current row itself.
+    callback activate(int) -> bool;
+    // Space: toggles the current row's check mark, and every selected row's with it.
+    callback space(int);
+    // Ctrl+C / Ctrl+Insert (true = with Shift: path and status columns).
+    callback copy(int, bool);
+    // Delete (true = Shift+Delete, permanent).
+    callback delete(int, bool);
+}
+
+component Cell inherits Text {
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// CLinkControl: a hyperlink-style label that is a Tab stop. Space, Enter or a
+// click activates it; `clicked(shift)` reports whether Shift was held.
+export component LinkLabel {
+    in property <string> text;
+    in property <bool> active: true;
+    callback clicked(bool);
+    public function take-focus() { focus.focus(); }
+    property <bool> shift;
+    min-width: label.preferred-width;
+    preferred-width: label.preferred-width;
+    min-height: label.preferred-height;
+    preferred-height: label.preferred-height;
+    FocusScope {
+        focus-on-click: false;
+        focus-on-tab-navigation: false;
+        capture-key-pressed(e) => {
+            root.shift = e.modifiers.shift;
+            reject
+        }
+        key-pressed(e) => {
+            if (e.text == Key.Return && !e.modifiers.control && !e.modifiers.alt && !e.modifiers.meta) {
+                if (root.active) { root.clicked(root.shift); }
+                return accept;
+            }
+            reject
+        }
+        label := Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.active ? #0366d6 : #8888;
+        }
+        focus := SpaceActivate {
+            enabled: root.active;
+            activated => { root.clicked(root.shift); }
+        }
+        TouchArea {
+            enabled: root.active;
+            mouse-cursor: pointer;
+            pointer-event(e) => {
+                if (e.kind == PointerEventKind.down) { root.shift = e.modifiers.shift; }
+            }
+            clicked => {
+                focus.focus();
+                root.clicked(root.shift);
+            }
+        }
+    }
+}
+
+export component FileList inherits Rectangle {
+    in-out property <[FileRow]> rows;
+    in property <bool> checkable: true;
+    in property <bool> show-numstat: true;
+    in property <bool> enabled: true;
+    // Identifies this list in FileListBridge; enables the context menu when set up.
+    in property <int> list-id: 0;
+    in property <bool> menu-enabled: false;
+    // Column captions (FileDiffDlg uses "File" / "Action").
+    in property <string> path-header: "Path";
+    in property <string> status-header: "Status";
+    in-out property <int> current: -1;
+    callback toggled(int, bool);
+    callback activated(int);
+    callback context(int);
+
+    forward-focus: keys;
+    border-width: 1px;
+    border-color: #8886;
+    VerticalLayout {
+        Rectangle {
+            height: 22px;
+            background: Colors.header-bg;
+            HorizontalLayout {
+                padding-left: root.checkable ? 30px : 6px;
+                spacing: 6px;
+                Cell { text: root.path-header; horizontal-stretch: 6; font-weight: 600; }
+                Cell { text: "Extension"; width: 70px; font-weight: 600; }
+                Cell { text: root.status-header; width: 90px; font-weight: 600; }
+                if root.show-numstat: Cell { text: "Lines added"; width: 80px; font-weight: 600; }
+                if root.show-numstat: Cell { text: "Lines removed"; width: 90px; font-weight: 600; }
+            }
+        }
+        // GitStatusListCtrl keys (spec-keyboard §1.1). Escape and Tab bubble to the dialog.
+        keys := FocusScope {
+            key-pressed(e) => {
+                if (e.modifiers.alt) { return reject; }
+                if (e.text == Key.UpArrow) { root.current = FileListBridge.key(root.list-id, 0, e.modifiers.shift); return accept; }
+                if (e.text == Key.DownArrow) { root.current = FileListBridge.key(root.list-id, 1, e.modifiers.shift); return accept; }
+                if (e.text == Key.Home) { root.current = FileListBridge.key(root.list-id, 3, e.modifiers.shift); return accept; }
+                if (e.text == Key.End) { root.current = FileListBridge.key(root.list-id, 4, e.modifiers.shift); return accept; }
+                if (e.modifiers.control || e.modifiers.meta) {
+                    if (e.text.to-lowercase() == "a") {
+                        FileListBridge.key(root.list-id, 2, false);
+                        return accept;
+                    }
+                    if (e.text.to-lowercase() == "c" || e.text == Key.Insert) {
+                        FileListBridge.copy(root.list-id, e.modifiers.shift);
+                        return accept;
+                    }
+                    // Ctrl+Enter belongs to the dialog (OK in Commit, Add, Revert, Resolve).
+                    return reject;
+                }
+                if (e.text == Key.Return) {
+                    if (!FileListBridge.activate(root.list-id) && root.current >= 0) { root.activated(root.current); }
+                    return accept;
+                }
+                if (e.text == " " && root.checkable) {
+                    if (root.enabled) { FileListBridge.space(root.list-id); }
+                    return accept;
+                }
+                if (e.text == Key.Delete) {
+                    FileListBridge.delete(root.list-id, e.modifiers.shift);
+                    return accept;
+                }
+                reject
+            }
+            ListView {
+                for row[i] in root.rows: Rectangle {
+                    height: 22px;
+                    background: row.selected || i == root.current ? Colors.selection : transparent;
+                    DynMenuArea {
+                        enabled: root.menu-enabled;
+                        blocks() => { return FileListBridge.menu(root.list-id, i); }
+                        chosen(id) => { FileListBridge.chosen(root.list-id, i, id); }
+                        TouchArea {
+                            double-clicked => { root.current = i; root.activated(i); }
+                            pointer-event(e) => {
+                                if (e.kind == PointerEventKind.down) {
+                                    keys.focus();
+                                    root.current = i;
+                                    if (e.button == PointerEventButton.left) {
+                                        FileListBridge.pressed(root.list-id, i, e.modifiers.control || e.modifiers.meta, e.modifiers.shift);
+                                    }
+                                    if (e.button == PointerEventButton.right) {
+                                        FileListBridge.right-pressed(root.list-id, i, e.modifiers.shift);
+                                        root.context(i);
+                                        if (root.menu-enabled) {
+                                            parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        spacing: 6px;
+                        if root.checkable: CheckBox {
+                            width: 20px;
+                            enabled: root.enabled;
+                            checked <=> row.checked;
+                            toggled => { root.toggled(i, self.checked); }
+                        }
+                        Cell {
+                            text: row.path;
+                            horizontal-stretch: 6;
+                            color: row.kind == 1 ? Colors.added : row.kind == 2 ? Colors.deleted
+                                : row.kind == 3 ? Colors.modified : row.kind == 4 ? Colors.conflict
+                                : row.kind == 5 ? Colors.renamed : row.kind == 6 ? Colors.muted : Palette.foreground;
+                        }
+                        Cell { text: row.extension; width: 70px; }
+                        Cell { text: row.status; width: 90px; }
+                        if root.show-numstat: Cell { text: row.added; width: 80px; horizontal-alignment: right; }
+                        if root.show-numstat: Cell { text: row.removed; width: 90px; horizontal-alignment: right; }
+                    }
+                }
+            }
+        }
+    }
+}

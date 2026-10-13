@@ -1,0 +1,210 @@
+// CRepositoryBrowser (IDD_REPOSITORY_BROWSER): caption "Repository Browser".
+import { Button, ListView, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { Colors } from "common.slint";
+import { EditCombo } from "remote_widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+export struct TreeNodeRow {
+    name: string,
+    depth: int,
+    expanded: bool,
+    has-children: bool,
+    selected: bool,
+}
+
+export struct RepoEntryRow {
+    name: string,
+    extension: string,
+    size: string,
+    // 0 file, 1 folder, 2 submodule
+    kind: int,
+    selected: bool,
+}
+
+component HeaderCell inherits Text {
+    font-weight: 600;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+component Cell inherits Text {
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component RepoBrowserDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Repository Browser - KoopaGit";
+    in property <string> path-text;
+    in-out property <string> revision;
+    in property <[string]> refs;
+    in property <[TreeNodeRow]> tree;
+    in property <[RepoEntryRow]> entries;
+    in property <string> info;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback revision-changed();
+    callback tree-clicked(int);
+    callback tree-toggled(int);
+    pure callback tree-menu-for(int) -> [MenuBlock];
+    callback tree-menu-action(int, int);
+    callback entry-clicked(int, bool, bool);
+    callback entry-activated(int);
+    pure callback menu-for(int) -> [MenuBlock];
+    callback menu-action(int);
+    // List keys: (delta, extend) for arrows, delta 0 = select all.
+    callback entry-key(int, bool);
+    // Enter in the file list: open the single selected entry.
+    callback entry-enter();
+    callback refresh();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 820px;
+    preferred-height: 560px;
+    min-width: 560px;
+    min-height: 360px;
+
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        KeyBinding { keys: @keys(F5); activated => { root.refresh(); } }
+        VerticalBox {
+            HorizontalLayout {
+                spacing: 6px;
+                Text { text: "Path:"; vertical-alignment: center; }
+                Text { text: root.path-text; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                Text { text: "Revision:"; vertical-alignment: center; }
+                EditCombo {
+                    width: 260px;
+                    text <=> root.revision;
+                    items: root.refs;
+                    selected => { root.revision-changed(); }
+                }
+                Button { text: "Show"; clicked => { root.revision-changed(); } }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                vertical-stretch: 1;
+                Rectangle {
+                    width: 240px;
+                    border-width: 1px;
+                    border-color: #8886;
+                    ListView {
+                        for node[i] in root.tree: Rectangle {
+                            height: 22px;
+                            background: node.selected ? Colors.selection : transparent;
+                            DynMenuArea {
+                                blocks() => { return root.tree-menu-for(i); }
+                                chosen(id) => { root.tree-menu-action(i, id); }
+                                TouchArea {
+                                    clicked => { root.tree-clicked(i); }
+                                    double-clicked => { root.tree-toggled(i); }
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                            parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                        }
+                                    }
+                                }
+                            }
+                            HorizontalLayout {
+                                padding-left: 4px + node.depth * 14px;
+                                spacing: 4px;
+                                Text {
+                                    width: 12px;
+                                    text: node.has-children ? (node.expanded ? "▾" : "▸") : "";
+                                    vertical-alignment: center;
+                                    TouchArea { clicked => { root.tree-toggled(i); } }
+                                }
+                                Cell { text: "📁 " + node.name; }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                    border-width: 1px;
+                    border-color: #8886;
+                    VerticalLayout {
+                        Rectangle {
+                            height: 22px;
+                            background: Colors.header-bg;
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                spacing: 6px;
+                                HeaderCell { text: "Filename"; horizontal-stretch: 1; preferred-width: 0px; }
+                                HeaderCell { text: "Extension"; width: 80px; }
+                                HeaderCell { text: "Size"; width: 90px; horizontal-alignment: right; }
+                            }
+                        }
+                        // CRepositoryBrowser: Ctrl+A and Enter (open, stays open) in the file list.
+                        entry-list := FocusScope {
+                            key-pressed(e) => {
+                                if (e.modifiers.alt) { return reject; }
+                                if (e.text == Key.UpArrow) { root.entry-key(-1, e.modifiers.shift); return accept; }
+                                if (e.text == Key.DownArrow) { root.entry-key(1, e.modifiers.shift); return accept; }
+                                if ((e.modifiers.control || e.modifiers.meta) && (e.text == "a" || e.text == "A")) {
+                                    root.entry-key(0, false);
+                                    return accept;
+                                }
+                                if (e.text == Key.Return) { root.entry-enter(); return accept; }
+                                reject
+                            }
+                            ListView {
+                                for e[i] in root.entries: Rectangle {
+                                    height: 22px;
+                                    background: e.selected ? Colors.selection : transparent;
+                                    DynMenuArea {
+                                        blocks() => { return root.menu-for(i); }
+                                        chosen(id) => { root.menu-action(id); }
+                                        TouchArea {
+                                            double-clicked => { root.entry-activated(i); }
+                                            pointer-event(ev) => {
+                                                if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left) {
+                                                    entry-list.focus();
+                                                    root.entry-clicked(i, ev.modifiers.control || ev.modifiers.meta, ev.modifiers.shift);
+                                                }
+                                                if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.right) {
+                                                    parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                                }
+                                            }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        padding-left: 6px;
+                                        spacing: 6px;
+                                        Cell {
+                                            text: (e.kind == 1 ? "📁 " : e.kind == 2 ? "📦 " : "") + e.name;
+                                            horizontal-stretch: 1;
+                                            preferred-width: 0px;
+                                        }
+                                        Cell { text: e.extension; width: 80px; }
+                                        Cell { text: e.size; width: 90px; horizontal-alignment: right; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                Text { text: root.info; color: #888; vertical-alignment: center; horizontal-stretch: 1; wrap: word-wrap; }
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

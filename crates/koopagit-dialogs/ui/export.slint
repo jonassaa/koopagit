@@ -1,0 +1,183 @@
+// CExportDlg (IDD_EXPORT, "Export") and CFormatPatchDlg (IDD_FORMAT_PATCH, "Format Patch").
+import { Button, CheckBox, LineEdit, GroupBox, VerticalBox, HorizontalBox, SpinBox } from "std-widgets.slint";
+import { ChooseVersion, Radio } from "choose.slint";
+import { EditCombo } from "remote_widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+export component ExportDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Export - KoopaGit";
+    in-out property <string> file;
+    in property <string> head-label: "HEAD";
+    in property <[string]> branches;
+    in property <[string]> tags;
+    in-out property <int> mode: 0;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    in-out property <string> commit-text;
+    in-out property <bool> whole-project;
+    in property <bool> whole-project-enabled: true;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback browse();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 520px;
+    min-width: 420px;
+
+    // The zip file edit is the first tab stop.
+    forward-focus: file-edit;
+    keys := DialogKeys {
+        ok-enabled: root.file != "";
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_EXPORT: &HEAD/&Branch/&Tag/&Commit, &Whole Project.
+        access-key(k) => {
+            if (version.access-key(k)) { return true; }
+            if (k == "w" && whole-check.enabled) {
+                root.whole-project = !root.whole-project;
+                whole-check.focus();
+                return true;
+            }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Export Zip File";
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: "Zip File"; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        file-edit := LineEdit {
+                            text <=> root.file;
+                            accepted => { if (root.file != "") { root.ok(); } }
+                        }
+                        Button { text: "..."; width: 36px; clicked => { root.browse(); } }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Revision";
+                version := ChooseVersion {
+                    accepted => { if (root.file != "") { root.ok(); } }
+                    show-head: true;
+                    head-label: root.head-label;
+                    branches: root.branches;
+                    tags: root.tags;
+                    mode <=> root.mode;
+                    branch-index <=> root.branch-index;
+                    tag-index <=> root.tag-index;
+                    commit-text <=> root.commit-text;
+                }
+            }
+            whole-check := CheckBox {
+                text: "Whole Project";
+                enabled: root.whole-project-enabled;
+                checked <=> root.whole-project;
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; enabled: root.file != ""; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}
+
+export component FormatPatchDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Format Patch - KoopaGit";
+    in-out property <string> dir;
+    in property <[string]> dir-history;
+    // 0 Since, 1 Number Commits, 2 Range
+    in-out property <int> mode: 0;
+    in-out property <string> since;
+    in property <[string]> branches;
+    in-out property <int> number: 1;
+    in-out property <string> from;
+    in property <[string]> from-history;
+    in-out property <string> to;
+    in property <[string]> to-history;
+    in-out property <bool> send-mail;
+    in-out property <bool> no-prefix;
+    in property <bool> ok-enabled: true;
+    in property <string> notice-text;
+    in property <bool> notice-error;
+    callback browse-dir();
+    callback unified-diff();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 560px;
+    min-width: 460px;
+
+    // IDD_FORMAT_PATCH has no access keys.
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok-enabled: root.ok-enabled;
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        VerticalBox {
+            GroupBox {
+                title: "Output Directory";
+                HorizontalLayout {
+                    spacing: 6px;
+                    Text { text: "Directory:"; vertical-alignment: center; width: 70px; }
+                    EditCombo { text <=> root.dir; items: root.dir-history; accepted => { if (root.ok-enabled) { root.ok(); } } }
+                    Button { text: "..."; width: 36px; clicked => { root.browse-dir(); } }
+                }
+            }
+            GroupBox {
+                title: "Version";
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Radio { width: 130px; text: "Since"; checked: root.mode == 0; clicked => { root.mode = 0; } }
+                        EditCombo { text <=> root.since; items: root.branches; enabled: root.mode == 0; accepted => { if (root.ok-enabled) { root.ok(); } } }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Radio { width: 130px; text: "Number Commits"; checked: root.mode == 1; clicked => { root.mode = 1; } }
+                        SpinBox { value <=> root.number; minimum: 1; maximum: 100000; enabled: root.mode == 1; }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Radio { width: 70px; text: "Range"; checked: root.mode == 2; clicked => { root.mode = 2; } }
+                        Text { text: "From:"; vertical-alignment: center; width: 52px; }
+                        EditCombo { text <=> root.from; items: root.from-history; enabled: root.mode == 2; accepted => { if (root.ok-enabled) { root.ok(); } } }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        padding-left: 78px;
+                        Text { text: "To:"; vertical-alignment: center; width: 52px; }
+                        EditCombo { text <=> root.to; items: root.to-history; enabled: root.mode == 2; accepted => { if (root.ok-enabled) { root.ok(); } } }
+                    }
+                }
+            }
+            CheckBox { text: "Send Mail after create"; checked <=> root.send-mail; }
+            CheckBox { text: "No a/ and b/ prefixes"; checked <=> root.no-prefix; }
+            NoticeBar { text: root.notice-text; error: root.notice-error; }
+            HorizontalBox {
+                padding: 0;
+                Button { text: "Save unified diff since HEAD"; clicked => { root.unified-diff(); } }
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "OK"; primary: true; enabled: root.ok-enabled; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

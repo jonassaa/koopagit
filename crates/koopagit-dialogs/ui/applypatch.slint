@@ -1,0 +1,190 @@
+// CImportPatchDlg (IDD_APPLY_PATCH_LIST): caption "Apply Patches".
+import { Button, CheckBox, ListView, TabWidget, TextEdit, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { NoticeBar } from "msgbox.slint";
+import { Colors } from "common.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+export struct PatchRow {
+    checked: bool,
+    name: string,
+    // 0 pending, 1 applying, 2 applied, 3 failed, 4 skipped
+    state: int,
+}
+
+export component ApplyPatchDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Apply Patches - KoopaGit";
+    in property <[PatchRow]> rows;
+    in-out property <int> current-row: -1;
+    in-out property <bool> three-way: true;
+    in-out property <bool> ignore-space: true;
+    in-out property <bool> sign-off;
+    in-out property <bool> keep-cr: true;
+    in property <bool> running;
+    in property <bool> finished;
+    in-out property <int> tab;
+    in property <string> patch-text;
+    in property <string> log-text;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback row-toggled(int, bool);
+    callback row-selected(int);
+    callback add();
+    callback up();
+    callback down();
+    callback remove();
+    callback apply();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 700px;
+    preferred-height: 560px;
+    min-width: 520px;
+    min-height: 420px;
+
+    property <bool> apply-enabled: !root.running && root.rows.length > 0;
+    property <bool> cancel-enabled: !root.finished || root.running;
+    property <bool> up-enabled: !root.running && root.current-row > 0;
+    property <bool> down-enabled: !root.running && root.current-row >= 0 && root.current-row < root.rows.length - 1;
+    property <bool> remove-enabled: !root.running && root.current-row >= 0;
+    function select-row(i: int) {
+        if (i >= 0 && i < root.rows.length) {
+            root.current-row = i;
+            root.row-selected(i);
+        }
+    }
+
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok-enabled: root.apply-enabled;
+        cancel-enabled: root.cancel-enabled;
+        ok => { root.apply(); }
+        cancel => { root.cancel(); }
+        // IDD_APPLY_PATCH_LIST: &Add, &Up, &Down, &Remove, &3 way merge, &ignore space
+        // change, Add "&Signed-off-by", &Keep CR, A&pply, &Cancel.
+        access-key(k) => {
+            if (k == "a") { if (!root.running) { root.add(); } return true; }
+            if (k == "u") { if (root.up-enabled) { root.up(); } return true; }
+            if (k == "d") { if (root.down-enabled) { root.down(); } return true; }
+            if (k == "r") { if (root.remove-enabled) { root.remove(); } return true; }
+            if (k == "p") { if (root.apply-enabled) { root.apply(); } return true; }
+            if (k == "c") { if (root.cancel-enabled) { root.cancel(); } return true; }
+            if (root.running) { return false; }
+            if (k == "3") { root.three-way = !root.three-way; three-way-check.focus(); return true; }
+            if (k == "i") { root.ignore-space = !root.ignore-space; ignore-space-check.focus(); return true; }
+            if (k == "s") { root.sign-off = !root.sign-off; sign-off-check.focus(); return true; }
+            if (k == "k") { root.keep-cr = !root.keep-cr; keep-cr-check.focus(); return true; }
+            false
+        }
+        VerticalBox {
+            HorizontalLayout {
+                spacing: 6px;
+                vertical-stretch: 1;
+                // The patch list (list view with check boxes): a tab stop where the
+                // arrows move the selection and Space toggles the selected patch.
+                list-keys := FocusScope {
+                    key-pressed(e) => {
+                        if (e.modifiers.control || e.modifiers.alt || e.modifiers.meta) { return reject; }
+                        if (e.text == Key.UpArrow) { root.select-row(max(0, root.current-row - 1)); return accept; }
+                        if (e.text == Key.DownArrow) { root.select-row(min(root.rows.length - 1, root.current-row + 1)); return accept; }
+                        if (e.text == Key.Home) { root.select-row(0); return accept; }
+                        if (e.text == Key.End) { root.select-row(root.rows.length - 1); return accept; }
+                        if (e.text == " ") {
+                            if (!root.running && root.current-row >= 0 && root.current-row < root.rows.length) {
+                                root.row-toggled(root.current-row, !root.rows[root.current-row].checked);
+                            }
+                            return accept;
+                        }
+                        reject
+                    }
+                    Rectangle {
+                        border-width: 1px;
+                        border-color: list-keys.has-focus ? Palette.accent-background : #8886;
+                        ListView {
+                            for row[i] in root.rows: Rectangle {
+                                height: 24px;
+                                background: i == root.current-row ? Colors.selection : row.state == 1 ? #0366d622 : transparent;
+                                TouchArea {
+                                    clicked => {
+                                        list-keys.focus();
+                                        root.current-row = i;
+                                        root.row-selected(i);
+                                    }
+                                }
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    spacing: 6px;
+                                    CheckBox {
+                                        width: 20px;
+                                        enabled: !root.running;
+                                        checked: row.checked;
+                                        toggled => { root.row-toggled(i, self.checked); }
+                                    }
+                                    Text {
+                                        text: row.name;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                        horizontal-stretch: 1;
+                                        color: row.state == 2 ? Colors.renamed : row.state == 3 ? Colors.conflict : row.state == 4 ? Colors.muted : Palette.foreground;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    spacing: 6px;
+                    width: 100px;
+                    Button { text: "Add"; enabled: !root.running; clicked => { root.add(); } }
+                    Button { text: "Up"; enabled: root.up-enabled; clicked => { root.up(); } }
+                    Button { text: "Down"; enabled: root.down-enabled; clicked => { root.down(); } }
+                    Button { text: "Remove"; enabled: root.remove-enabled; clicked => { root.remove(); } }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: start;
+                three-way-check := CheckBox { text: "3 way merge"; checked <=> root.three-way; enabled: !root.running; }
+                ignore-space-check := CheckBox { text: "ignore space change"; checked <=> root.ignore-space; enabled: !root.running; }
+                sign-off-check := CheckBox { text: "Add \"Signed-off-by\""; checked <=> root.sign-off; enabled: !root.running; }
+                keep-cr-check := CheckBox { text: "Keep CR"; checked <=> root.keep-cr; enabled: !root.running; }
+            }
+            TabWidget {
+                vertical-stretch: 1;
+                current-index <=> root.tab;
+                Tab {
+                    title: "Patch";
+                    TextEdit { text: root.patch-text; read-only: true; wrap: no-wrap; font-size: 12px; }
+                }
+                Tab {
+                    title: "Log";
+                    TextEdit { text: root.log-text; read-only: true; wrap: no-wrap; font-size: 12px; }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button {
+                    text: root.finished ? "OK" : "Apply";
+                    primary: true;
+                    enabled: root.apply-enabled;
+                    clicked => { root.apply(); }
+                }
+                Button {
+                    text: root.running ? "Abort" : "Cancel";
+                    enabled: root.cancel-enabled;
+                    clicked => { root.cancel(); }
+                }
+            }
+        }
+    }
+}

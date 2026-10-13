@@ -1,0 +1,250 @@
+// CCreateWorktreeDlg (IDD_WORKTREE_CREATE, "New Worktree") and
+// CWorktreeListDlg (IDD_WORKTREE_LIST, "Worktree List").
+import { Button, CheckBox, LineEdit, GroupBox, ListView, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { ChooseVersion } from "choose.slint";
+import { NoticeBar } from "msgbox.slint";
+import { Colors } from "common.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys } from "keys.slint";
+
+export component NewWorktreeDialog inherits KoopaWindow {
+    in property <string> dialog-title: "New Worktree - KoopaGit";
+    in-out property <string> dir;
+    in property <string> head-label: "HEAD";
+    in property <[string]> branches;
+    in property <[string]> tags;
+    in-out property <int> mode: 0;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    in-out property <string> commit-text;
+    in-out property <bool> new-branch;
+    in-out property <string> branch-name;
+    in-out property <bool> checkout: true;
+    in-out property <bool> force;
+    in-out property <bool> detach;
+    in property <bool> detach-enabled: true;
+    in property <string> notice-text;
+    callback version-changed();
+    callback branch-toggled();
+    callback detach-toggled();
+    callback browse();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    preferred-width: 520px;
+    min-width: 420px;
+
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_WORKTREE_CREATE captions: "&Location", "Bro&wse...", &HEAD/&Branch/&Tag/&Commit,
+        // "Create &New Branch", "&Checkout" (Alt+C goes to &Commit first), "&Force", "&Detach".
+        access-key(k) => {
+            if (k == "l") { dir-edit.focus(); return true; }
+            if (k == "w") { root.browse(); return true; }
+            if (version.access-key(k)) { return true; }
+            if (k == "n") {
+                root.new-branch = !root.new-branch;
+                new-branch-check.focus();
+                root.branch-toggled();
+                return true;
+            }
+            if (k == "f") { root.force = !root.force; force-check.focus(); return true; }
+            if (k == "d" && root.detach-enabled) {
+                root.detach = !root.detach;
+                detach-check.focus();
+                root.detach-toggled();
+                return true;
+            }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Location";
+                HorizontalLayout {
+                    spacing: 6px;
+                    Text { text: "Directory:"; vertical-alignment: center; width: 70px; }
+                    dir-edit := LineEdit {
+                        text <=> root.dir;
+                        edited => { root.version-changed(); }
+                        accepted => { root.ok(); }
+                    }
+                    Button { text: "Browse..."; clicked => { root.browse(); } }
+                }
+            }
+            GroupBox {
+                title: "Base On";
+                version := ChooseVersion {
+                    accepted => { root.ok(); }
+                    show-head: true;
+                    head-label: root.head-label;
+                    branches: root.branches;
+                    tags: root.tags;
+                    mode <=> root.mode;
+                    branch-index <=> root.branch-index;
+                    tag-index <=> root.tag-index;
+                    commit-text <=> root.commit-text;
+                    changed => { root.version-changed(); }
+                }
+            }
+            GroupBox {
+                title: "Options";
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        new-branch-check := CheckBox {
+                            text: "Create New Branch";
+                            checked <=> root.new-branch;
+                            toggled => { root.branch-toggled(); }
+                        }
+                        LineEdit { text <=> root.branch-name; enabled: root.new-branch; accepted => { root.ok(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        CheckBox { text: "Checkout"; checked <=> root.checkout; }
+                        force-check := CheckBox { text: "Force"; checked <=> root.force; }
+                        detach-check := CheckBox {
+                            text: "Detach";
+                            enabled: root.detach-enabled;
+                            checked <=> root.detach;
+                            toggled => { root.detach-toggled(); }
+                        }
+                    }
+                }
+            }
+            NoticeBar { text: root.notice-text; error: true; }
+            HorizontalBox {
+                padding: 0;
+                alignment: end;
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}
+
+export struct WorktreeRowData {
+    path: string,
+    hash: string,
+    branch: string,
+    locked: string,
+    reason: string,
+    selected: bool,
+}
+
+component HeaderCell inherits Text {
+    font-weight: 600;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+component Cell inherits Text {
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component WorktreeListDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Worktree List - KoopaGit";
+    in property <[WorktreeRowData]> rows;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    // (row, toggle modifier, range modifier)
+    callback row-clicked(int, bool, bool);
+    callback row-activated(int);
+    pure callback menu-for(int) -> [MenuBlock];
+    callback menu-action(int);
+    callback add();
+    callback prune();
+    callback refresh();
+    callback ok();
+
+    title: root.dialog-title;
+    preferred-width: 720px;
+    preferred-height: 340px;
+    min-width: 480px;
+    min-height: 240px;
+
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.ok(); }
+        // IDD_WORKTREE_LIST captions: "&Add", "&Prune".
+        access-key(k) => {
+            if (k == "a") { root.add(); return true; }
+            if (k == "p") { root.prune(); return true; }
+            false
+        }
+        KeyBinding { keys: @keys(F5); activated => { root.refresh(); } }
+        VerticalBox {
+            Rectangle {
+                vertical-stretch: 1;
+                border-width: 1px;
+                border-color: #8886;
+                VerticalLayout {
+                    Rectangle {
+                        height: 22px;
+                        background: Colors.header-bg;
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            spacing: 6px;
+                            HeaderCell { text: "Path"; horizontal-stretch: 3; preferred-width: 0px; }
+                            HeaderCell { text: "SHA-1"; width: 90px; }
+                            HeaderCell { text: "Branch"; width: 120px; }
+                            HeaderCell { text: "Locked"; width: 70px; }
+                            HeaderCell { text: "Reason"; horizontal-stretch: 1; preferred-width: 0px; }
+                        }
+                    }
+                    ListView {
+                        for row[i] in root.rows: Rectangle {
+                            height: 22px;
+                            background: row.selected ? Colors.selection : transparent;
+                            DynMenuArea {
+                                blocks() => { return root.menu-for(i); }
+                                chosen(id) => { root.menu-action(id); }
+                                TouchArea {
+                                    double-clicked => { root.row-activated(i); }
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) {
+                                            root.row-clicked(i, e.modifiers.control || e.modifiers.meta, e.modifiers.shift);
+                                        }
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.right) {
+                                            parent.show({ x: self.mouse-x, y: self.mouse-y });
+                                        }
+                                    }
+                                }
+                            }
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                spacing: 6px;
+                                Cell { text: row.path; horizontal-stretch: 3; preferred-width: 0px; }
+                                Cell { text: row.hash; width: 90px; }
+                                Cell { text: row.branch; width: 120px; }
+                                Cell { text: row.locked; width: 70px; }
+                                Cell { text: row.reason; horizontal-stretch: 1; preferred-width: 0px; }
+                            }
+                        }
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                error: root.notice-error;
+                clicked(i) => { root.notice-clicked(i); }
+            }
+            HorizontalBox {
+                padding: 0;
+                Button { text: "Add"; clicked => { root.add(); } }
+                Button { text: "Prune"; clicked => { root.prune(); } }
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+            }
+        }
+    }
+}

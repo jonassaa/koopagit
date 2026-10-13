@@ -1,0 +1,184 @@
+// CFileDiffDlg (IDD_DIFFFILES): caption "Changed Files".
+import { Button, LineEdit, GroupBox, VerticalBox, HorizontalBox, TextEdit } from "std-widgets.slint";
+import { FileList, FileRow, LinkLabel } from "common.slint";
+import { DialogKeys } from "keys.slint";
+import { EditCombo } from "remote_widgets.slint";
+import { KoopaWindow } from "window.slint";
+
+export component FileDiffDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Changed Files - KoopaGit";
+    in-out property <string> rev1-text;
+    in-out property <string> rev2-text;
+    in property <string> rev1-info;
+    in property <string> rev2-info;
+    in property <string> rev1-group: "Version 1 (Base)";
+    in property <string> rev2-group: "Version 2";
+    in property <[string]> refs;
+    in-out property <string> filter-text;
+    in property <[FileRow]> rows;
+    in-out property <int> current-row: -1;
+    // "Please wait while differences are obtained..." / "No differences found!" / errors
+    in property <string> list-text;
+    in property <bool> log-enabled;
+    in property <bool> swap-enabled: true;
+    in-out property <bool> opt-eol;
+    in-out property <bool> opt-change;
+    in-out property <bool> opt-all;
+    in-out property <bool> opt-blank;
+    in-out property <bool> opt-ancestor;
+    in-out property <bool> patch-visible;
+    in property <string> patch-text;
+    callback rev-entered();
+    callback set-head(int);
+    callback swap();
+    callback show-log();
+    callback filter-edited();
+    callback options-changed();
+    callback row-activated(int);
+    callback row-selected(int);
+    callback toggle-patch();
+    callback close-dialog();
+
+    title: root.dialog-title;
+    preferred-width: 720px;
+    preferred-height: 620px;
+    min-width: 480px;
+    min-height: 420px;
+
+    forward-focus: list;
+    // CFileDiffDlg::PreTranslateMessage: Enter outside the list does nothing
+    // (OnOK is empty), Escape closes, F5 re-reads the differences.
+    keys := DialogKeys {
+        cancel => { root.close-dialog(); }
+      FocusScope {
+        focus-on-click: false;
+        focus-on-tab-navigation: false;
+        key-pressed(e) => {
+            if (e.text == Key.F5 && !e.modifiers.control && !e.modifiers.alt && !e.modifiers.meta) {
+                root.rev-entered();
+                return accept;
+            }
+            reject
+        }
+        VerticalBox {
+            HorizontalBox {
+                padding: 0;
+                Text { text: "Difference between"; vertical-alignment: center; horizontal-stretch: 1; }
+                options-btn := Button {
+                    text: "Diff Options";
+                    checkable: true;
+                    checked: root.opt-eol || root.opt-change || root.opt-all || root.opt-blank || root.opt-ancestor;
+                    clicked => {
+                        // keep the pressed look in sync with the options, not the click
+                        self.checked = root.opt-eol || root.opt-change || root.opt-all || root.opt-blank || root.opt-ancestor;
+                        options-menu.show({ x: options-btn.x, y: options-btn.y + options-btn.height });
+                    }
+                }
+                Button { text: "Show log"; enabled: root.log-enabled; clicked => { root.show-log(); } }
+                Button { text: "⇅"; width: 36px; enabled: root.swap-enabled; clicked => { root.swap(); } }
+            }
+            GroupBox {
+                title: root.rev1-group;
+                VerticalLayout {
+                    spacing: 4px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        EditCombo {
+                            text <=> root.rev1-text;
+                            items: root.refs;
+                            selected => { root.rev-entered(); }
+                        }
+                        Button { text: "HEAD"; width: 80px; clicked => { root.set-head(1); } }
+                    }
+                    Text { text: root.rev1-info; overflow: elide; color: #888; }
+                }
+            }
+            GroupBox {
+                title: root.rev2-group;
+                VerticalLayout {
+                    spacing: 4px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        EditCombo {
+                            text <=> root.rev2-text;
+                            items: root.refs;
+                            selected => { root.rev-entered(); }
+                        }
+                        Button { text: "HEAD"; width: 80px; clicked => { root.set-head(2); } }
+                    }
+                    Text { text: root.rev2-info; overflow: elide; color: #888; }
+                }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                // Escape in a non-empty filter clears it instead of closing.
+                FocusScope {
+                    horizontal-stretch: 1;
+                    focus-on-click: false;
+                    focus-on-tab-navigation: false;
+                    key-pressed(e) => {
+                        if (e.text == Key.Escape && root.filter-text != "") {
+                            root.filter-text = "";
+                            root.filter-edited();
+                            return accept;
+                        }
+                        reject
+                    }
+                    LineEdit {
+                        text <=> root.filter-text;
+                        placeholder-text: "Filter paths";
+                        edited => { root.filter-edited(); }
+                    }
+                }
+                Button { text: "Refresh"; clicked => { root.rev-entered(); } }
+            }
+            Rectangle {
+                vertical-stretch: 3;
+                list := FileList {
+                    width: 100%;
+                    height: 100%;
+                    checkable: false;
+                    list-id: 1;
+                    menu-enabled: true;
+                    path-header: "File";
+                    status-header: "Action";
+                    rows: root.rows;
+                    current <=> root.current-row;
+                    activated(i) => { root.row-activated(i); }
+                }
+                if root.list-text != "": Text {
+                    text: root.list-text;
+                    color: #888;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            if root.patch-visible: TextEdit {
+                vertical-stretch: 2;
+                text: root.patch-text;
+                read-only: true;
+                wrap: no-wrap;
+                font-size: 12px;
+            }
+            HorizontalLayout {
+                alignment: end;
+                LinkLabel {
+                    text: root.patch-visible ? "Hide Patch<<" : "View Patch>>";
+                    clicked => { root.toggle-patch(); }
+                }
+            }
+        }
+      }
+    }
+
+    options-menu := ContextMenuArea {
+        Menu {
+            MenuItem { title: "Ignore space at EOL"; checked: root.opt-eol; activated => { root.opt-eol = !root.opt-eol; root.options-changed(); } }
+            MenuItem { title: "Ignore space change"; checked: root.opt-change; activated => { root.opt-change = !root.opt-change; root.options-changed(); } }
+            MenuItem { title: "Ignore all space"; checked: root.opt-all; activated => { root.opt-all = !root.opt-all; root.options-changed(); } }
+            MenuItem { title: "Ignore blank lines"; checked: root.opt-blank; activated => { root.opt-blank = !root.opt-blank; root.options-changed(); } }
+            MenuSeparator { }
+            MenuItem { title: "Use common ancestor (A...B diff)"; checked: root.opt-ancestor; activated => { root.opt-ancestor = !root.opt-ancestor; root.options-changed(); } }
+        }
+    }
+}

@@ -1,0 +1,90 @@
+// CResetDlg (IDD_RESET): caption "Reset".
+import { Button, LineEdit, GroupBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { ChooseVersion, Radio } from "choose.slint";
+import { DialogKeys } from "keys.slint";
+import { KoopaWindow } from "window.slint";
+
+export component ResetDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Reset - KoopaGit";
+    in property <string> current-branch;
+    in-out property <string> revision;
+    in property <[string]> branches;
+    in property <[string]> tags;
+    // ChooseVersion: 1 Branch, 2 Tag, 3 Commit
+    in-out property <int> version-mode: 3;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    // 0 Soft, 1 Mixed (default), 2 Hard
+    in-out property <int> reset-type: 1;
+    in property <bool> bare;
+    in property <string> error-text;
+    callback show-modified();
+    callback ok();
+    callback cancel();
+
+    title: root.dialog-title;
+    min-width: 480px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_RESET captions: &Branch/&Tag/&Commit, &Soft/&Mixed/&Hard, "Show modified files in &working tree".
+        access-key(k) => {
+            if (version.access-key(k)) { return true; }
+            if (k == "s") { root.reset-type = 0; soft.take-focus(); return true; }
+            if (k == "m" && !root.bare) { root.reset-type = 1; mixed.take-focus(); return true; }
+            if (k == "h" && !root.bare) { root.reset-type = 2; hard.take-focus(); return true; }
+            if (k == "w") { root.show-modified(); return true; }
+            false
+        }
+        VerticalBox {
+            HorizontalBox {
+                padding: 0;
+                Text { text: "Current branch:"; vertical-alignment: center; }
+                LineEdit { text: root.current-branch; read-only: true; }
+            }
+            GroupBox {
+                title: "Reset active branch";
+                version := ChooseVersion {
+                    accepted => { root.ok(); }
+                    branches: root.branches;
+                    tags: root.tags;
+                    mode <=> root.version-mode;
+                    branch-index <=> root.branch-index;
+                    tag-index <=> root.tag-index;
+                    commit-text <=> root.revision;
+                }
+            }
+            GroupBox {
+                title: "Reset Type";
+                VerticalBox {
+                    soft := Radio {
+                        text: "Soft: Leave working tree and index untouched";
+                        checked: root.reset-type == 0;
+                        clicked => { root.reset-type = 0; }
+                    }
+                    mixed := Radio {
+                        text: "Mixed: Leave working tree untouched, reset index";
+                        enabled: !root.bare;
+                        checked: root.reset-type == 1;
+                        clicked => { root.reset-type = 1; }
+                    }
+                    hard := Radio {
+                        text: "Hard: Reset working tree and index (discard all local changes)";
+                        enabled: !root.bare;
+                        checked: root.reset-type == 2;
+                        clicked => { root.reset-type = 2; }
+                    }
+                }
+            }
+            if root.error-text != "": Text { text: root.error-text; color: #d73a49; wrap: word-wrap; }
+            HorizontalBox {
+                padding: 0;
+                Button { text: "Show modified files in working tree"; clicked => { root.show-modified(); } }
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+
+[workspace.dependencies]
+koopagit-core = { path = "crates/koopagit-core" }
+koopagit-shell = { path = "crates/koopagit-shell" }
+koopagit-dialogs = { path = "crates/koopagit-dialogs" }
+thiserror = "2"
+clap = "4.6"
+tempfile = "3"

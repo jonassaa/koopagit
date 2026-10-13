@@ -1,0 +1,296 @@
+// CCommitDlg (IDD_COMMITDLG): caption "Commit".
+import { Button, CheckBox, LineEdit, TextEdit, GroupBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { FileList, FileRow, LinkLabel } from "common.slint";
+import { NoticeBar } from "msgbox.slint";
+import { DynMenuArea, MenuBlock } from "dynmenu.slint";
+import { DialogKeys, KeyboardPrefs } from "keys.slint";
+import { KoopaWindow } from "window.slint";
+
+export component CommitDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Commit - KoopaGit";
+    in property <string> branch;
+    in-out property <bool> new-branch;
+    in-out property <string> new-branch-name;
+    in property <bool> merge-active;
+    in-out property <string> message;
+    in property <bool> bug-id-visible;
+    in property <string> bug-id-label: "Bug-ID / Issue-Nr:";
+    in-out property <string> bug-id;
+    in-out property <bool> amend;
+    in property <bool> amend-enabled: true;
+    in-out property <bool> set-date;
+    in-out property <string> date-text;
+    in-out property <bool> date-reset;
+    in-out property <bool> set-author;
+    in-out property <string> author;
+    in-out property <[FileRow]> rows;
+    in-out property <int> current-row: -1;
+    in-out property <bool> show-unversioned;
+    in-out property <bool> whole-project;
+    in property <bool> whole-project-enabled: true;
+    in-out property <bool> message-only;
+    in property <string> stats-text;
+    in property <bool> ok-enabled;
+    in property <[bool]> link-enabled: [true, true, true, true, true, true, true, true, true];
+    // 0 Commit, 1 ReCommit, 2 Commit & Push (CommitLastAction)
+    in-out property <int> commit-action;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    in property <bool> notice-error;
+    callback notice-clicked(int);
+    callback check-links(int, bool);
+    callback row-toggled(int, bool);
+    callback row-activated(int);
+    callback refresh();
+    callback options-changed();
+    callback amend-toggled();
+    callback sign-off();
+    callback commit();
+    callback cancel();
+    // Message editor context menu.
+    pure callback message-menu() -> [MenuBlock];
+    callback message-menu-action(int);
+    public function message-cut() { msg.cut(); }
+    public function message-copy() { msg.copy(); }
+    public function message-paste() { msg.paste(); }
+    public function message-select-all() { msg.select-all(); }
+    public function message-focus() { msg.focus(); }
+    // The default button (C&ommit) when it is enabled.
+    function press-ok() {
+        if (root.ok-enabled) { root.commit(); }
+    }
+
+    title: root.dialog-title;
+    preferred-width: 780px;
+    preferred-height: 640px;
+    min-width: 560px;
+    min-height: 460px;
+    forward-focus: msg;
+
+    keys := DialogKeys {
+        ok-enabled: root.ok-enabled;
+        ok => { root.commit(); }
+        cancel => { root.cancel(); }
+        // IDD_COMMITDLG captions (spec-keyboard §6) and IDR_ACC_COMMITDLG (Alt+M, Alt+F).
+        // "&All" / "&None" are handled below, where Shift (invert) is known.
+        access-key(k) => {
+            if (k == "m") { msg.focus(); return true; }
+            if (k == "f") { list.focus(); return true; }
+            // Split-button entries "C&ommit", "&ReCommit", "Commit && &Push": select and commit.
+            if (k == "o" || k == "r" || k == "p") {
+                if (root.ok-enabled) {
+                    root.commit-action = k == "o" ? 0 : k == "r" ? 1 : 2;
+                    root.commit();
+                }
+                return true;
+            }
+            if (k == "l") {
+                if (root.amend-enabled) {
+                    root.amend = !root.amend;
+                    root.amend-toggled();
+                    amend-check.focus();
+                }
+                return true;
+            }
+            if (k == "d") { root.set-date = !root.set-date; date-check.focus(); return true; }
+            if (k == "t") { root.set-author = !root.set-author; author-check.focus(); return true; }
+            if (k == "s") { root.sign-off(); return true; }
+            if (k == "u") {
+                root.show-unversioned = !root.show-unversioned;
+                root.refresh();
+                unversioned-check.focus();
+                return true;
+            }
+            if (k == "w") {
+                if (root.whole-project-enabled) {
+                    root.whole-project = !root.whole-project;
+                    root.refresh();
+                    whole-check.focus();
+                }
+                return true;
+            }
+            if (k == "y") {
+                root.message-only = !root.message-only;
+                root.options-changed();
+                message-only-check.focus();
+                return true;
+            }
+            false
+        }
+        FocusScope {
+            focus-on-click: false;
+            focus-on-tab-navigation: false;
+            // CCommitDlg::PreTranslateMessage runs before the focused control.
+            capture-key-pressed(e) => {
+                // Ctrl+Enter commits from anywhere, the message editor included.
+                if (e.text == Key.Return && e.modifiers.control && !e.modifiers.alt) {
+                    root.press-ok();
+                    return accept;
+                }
+                if (KeyboardPrefs.access-keys && e.modifiers.alt && !e.modifiers.control && !e.modifiers.meta) {
+                    if (e.text.to-lowercase() == "a") { root.check-links(0, e.modifiers.shift); return accept; }
+                    if (e.text.to-lowercase() == "n") { root.check-links(1, e.modifiers.shift); return accept; }
+                }
+                reject
+            }
+            key-pressed(e) => {
+                if (e.text == Key.F5 && !e.modifiers.control && !e.modifiers.alt && !e.modifiers.meta) {
+                    root.refresh();
+                    return accept;
+                }
+                reject
+            }
+            VerticalBox {
+                HorizontalBox {
+                    padding: 0;
+                    Text { text: "Commit to:"; vertical-alignment: center; }
+                    if !root.new-branch: LineEdit {
+                        text: root.branch;
+                        read-only: true;
+                        accepted => { root.press-ok(); }
+                    }
+                    if root.new-branch: LineEdit {
+                        text <=> root.new-branch-name;
+                        placeholder-text: "new branch name";
+                        edited => { root.options-changed(); }
+                        accepted => { root.press-ok(); }
+                    }
+                    CheckBox {
+                        text: "new branch";
+                        enabled: !root.merge-active;
+                        checked <=> root.new-branch;
+                        toggled => { root.options-changed(); }
+                    }
+                }
+                if root.bug-id-visible: HorizontalBox {
+                    padding: 0;
+                    Text { text: root.bug-id-label; vertical-alignment: center; }
+                    // Enter moves on to the message editor.
+                    LineEdit {
+                        text <=> root.bug-id;
+                        accepted => { msg.focus(); }
+                    }
+                }
+                GroupBox {
+                    title: "Message:";
+                    vertical-stretch: 2;
+                    // The message editor's context menu (CSciEdit + CCommitDlg entries).
+                    DynMenuArea {
+                        blocks() => { return root.message-menu(); }
+                        chosen(id) => { root.message-menu-action(id); }
+                        msg := TextEdit {
+                            text <=> root.message;
+                            wrap: word-wrap;
+                            edited => { root.options-changed(); }
+                        }
+                    }
+                }
+                HorizontalBox {
+                    padding: 0;
+                    amend-check := CheckBox {
+                        text: "Amend Last Commit";
+                        enabled: root.amend-enabled;
+                        checked <=> root.amend;
+                        toggled => { root.amend-toggled(); }
+                    }
+                    date-check := CheckBox { text: "Set author date"; checked <=> root.set-date; }
+                    if root.set-date: LineEdit {
+                        text <=> root.date-text;
+                        enabled: !root.date-reset;
+                        width: 170px;
+                        placeholder-text: "YYYY-MM-DDTHH:MM:SS";
+                        accepted => { root.press-ok(); }
+                    }
+                    if root.set-date && root.amend: CheckBox { text: "Reset"; checked <=> root.date-reset; }
+                    author-check := CheckBox { text: "Set author"; checked <=> root.set-author; }
+                    LineEdit {
+                        text <=> root.author;
+                        read-only: !root.set-author;
+                        accepted => { root.press-ok(); }
+                    }
+                    Button { text: "Add Signed-off-by"; clicked => { root.sign-off(); } }
+                }
+                Text { text: "Changes made (F5: refresh, double-click on file for diff):"; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: "Check:"; }
+                    for name[i] in ["All", "None", "Unversioned", "Versioned", "Added", "Deleted", "Modified", "Files", "Submodules"]: LinkLabel {
+                        text: name;
+                        active: root.link-enabled[i];
+                        clicked(shift) => { root.check-links(i, shift); }
+                    }
+                }
+                list := FileList {
+                    vertical-stretch: 3;
+                    rows <=> root.rows;
+                    current <=> root.current-row;
+                    list-id: 0;
+                    menu-enabled: true;
+                    enabled: !root.message-only;
+                    toggled(i, c) => { root.row-toggled(i, c); }
+                    activated(i) => { root.row-activated(i); }
+                }
+                HorizontalBox {
+                    padding: 0;
+                    unversioned-check := CheckBox {
+                        text: "Show Unversioned Files";
+                        checked <=> root.show-unversioned;
+                        toggled => { root.refresh(); }
+                    }
+                    Text { text: root.stats-text; vertical-alignment: center; horizontal-stretch: 1; }
+                    whole-check := CheckBox {
+                        text: "Show Whole Project";
+                        enabled: root.whole-project-enabled;
+                        checked <=> root.whole-project;
+                        toggled => { root.refresh(); }
+                    }
+                    message-only-check := CheckBox {
+                        text: "Message only";
+                        checked <=> root.message-only;
+                        toggled => { root.options-changed(); }
+                    }
+                }
+                NoticeBar {
+                    text: root.notice-text;
+                    buttons: root.notice-buttons;
+                    error: root.notice-error;
+                    clicked(i) => { root.notice-clicked(i); }
+                }
+                HorizontalBox {
+                    padding: 0;
+                    alignment: end;
+                    Button {
+                        text: root.commit-action == 1 ? "ReCommit" : root.commit-action == 2 ? "Commit & Push" : "Commit";
+                        primary: true;
+                        enabled: root.ok-enabled;
+                        clicked => { root.commit(); }
+                    }
+                    Button {
+                        text: "▾";
+                        width: 28px;
+                        clicked => { action-menu.show(); }
+                    }
+                    Button { text: "Cancel"; clicked => { root.cancel(); } }
+                }
+            }
+        }
+    }
+    action-menu := PopupWindow {
+        x: root.width - 260px;
+        y: root.height - 120px;
+        Rectangle {
+            background: #ffffff;
+            border-width: 1px;
+            border-color: #888;
+            VerticalLayout {
+                padding: 4px;
+                for label[i] in ["Commit", "ReCommit", "Commit & Push"]: Rectangle {
+                    height: 24px;
+                    width: 150px;
+                    Text { text: label; x: 6px; vertical-alignment: center; height: parent.height; }
+                    TouchArea { clicked => { root.commit-action = i; } }
+                }
+            }
+        }
+    }
+}

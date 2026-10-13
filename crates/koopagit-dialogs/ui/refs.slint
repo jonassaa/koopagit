@@ -1,0 +1,666 @@
+// Branch/ref dialogs: Switch/Checkout, Create Branch/Tag, Merge, Abort Merge
+// and Stash.
+import { Button, CheckBox, LineEdit, TextEdit, GroupBox, VerticalBox, HorizontalBox, ComboBox, SpinBox, ListView, Palette } from "std-widgets.slint";
+import { ChooseVersion, Radio } from "choose.slint";
+import { NoticeBar } from "msgbox.slint";
+import { KoopaWindow } from "window.slint";
+import { DialogKeys, SpaceActivate } from "keys.slint";
+
+// Tri-state checkbox: 0 unchecked, 1 checked, 2 indeterminate.
+export component TriCheck inherits Rectangle {
+    in property <string> text;
+    in-out property <int> state: 2;
+    in property <bool> enabled: true;
+    min-height: 22px;
+    HorizontalLayout {
+        spacing: 6px;
+        alignment: start;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 3px;
+                border-width: 1px;
+                border-color: root.enabled ? Palette.foreground : #8888;
+                background: root.state == 1 ? Palette.accent-background : transparent;
+                Text {
+                    text: root.state == 1 ? "✓" : root.state == 2 ? "–" : "";
+                    color: root.state == 1 ? Palette.accent-foreground : Palette.foreground;
+                    font-size: 11px;
+                }
+            }
+        }
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.enabled ? Palette.foreground : #8888;
+        }
+    }
+    // BS_AUTO3STATE access key: cycle the state and focus the box.
+    public function toggle() {
+        keys.focus();
+        root.cycle();
+    }
+    function cycle() {
+        root.state = root.state == 1 ? 0 : root.state == 0 ? 2 : 1;
+    }
+    keys := SpaceActivate {
+        enabled: root.enabled;
+        activated => { root.cycle(); }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            keys.focus();
+            root.cycle();
+        }
+    }
+}
+
+component OkCancel inherits HorizontalBox {
+    in property <bool> ok-enabled: true;
+    in property <string> ok-text: "OK";
+    callback ok();
+    callback cancel();
+    padding: 0;
+    alignment: end;
+    Button {
+        text: root.ok-text;
+        primary: true;
+        enabled: root.ok-enabled;
+        clicked => {
+            root.ok();
+        }
+    }
+    Button {
+        text: "Cancel";
+        clicked => {
+            root.cancel();
+        }
+    }
+}
+
+export component SwitchDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Switch/Checkout";
+    in property <[string]> branches;
+    in property <[string]> tags;
+    in-out property <int> mode: 1;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    in-out property <string> commit-text;
+    in-out property <bool> create-branch;
+    in-out property <string> branch-name;
+    in-out property <bool> force;
+    in-out property <bool> merge;
+    in-out property <int> track: 2;
+    in-out property <bool> track-enabled;
+    in-out property <bool> override-branch;
+    in property <string> notice-text;
+    callback version-changed();
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 480px;
+    // "Create &New Branch" toggled: clear what only applies to a new branch.
+    function create-branch-toggled() {
+        if (!root.create-branch) {
+            root.override-branch = false;
+            root.track = 0;
+        }
+    }
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_GITSWITCH: &Branch/&Tag/&Commit, Create &New Branch, Overwrite working
+        // tree changes (&force), &Merge, T&rack, &Override branch if exists.
+        access-key(k) => {
+            if (version.access-key(k)) { return true; }
+            if (k == "n") {
+                root.create-branch = !root.create-branch;
+                root.create-branch-toggled();
+                create-check.focus();
+                return true;
+            }
+            if (k == "f") { root.force = !root.force; force-check.focus(); return true; }
+            if (k == "m") { root.merge = !root.merge; merge-check.focus(); return true; }
+            if (k == "r" && track-check.enabled) { track-check.toggle(); return true; }
+            if (k == "o" && override-check.enabled) {
+                root.override-branch = !root.override-branch;
+                override-check.focus();
+                return true;
+            }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Switch To";
+                version := ChooseVersion {
+                    accepted => { root.ok(); }
+                    branches: root.branches;
+                    tags: root.tags;
+                    mode <=> root.mode;
+                    branch-index <=> root.branch-index;
+                    tag-index <=> root.tag-index;
+                    commit-text <=> root.commit-text;
+                    changed => {
+                        root.version-changed();
+                    }
+                }
+            }
+            GroupBox {
+                title: "Option";
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        create-check := CheckBox {
+                            text: "Create New Branch";
+                            checked <=> root.create-branch;
+                            toggled => { root.create-branch-toggled(); }
+                        }
+                        LineEdit {
+                            text <=> root.branch-name;
+                            enabled: root.create-branch;
+                            accepted => { root.ok(); }
+                        }
+                    }
+                    force-check := CheckBox {
+                        text: "Overwrite working tree changes (force)";
+                        checked <=> root.force;
+                    }
+                    merge-check := CheckBox {
+                        text: "Merge";
+                        checked <=> root.merge;
+                    }
+                    track-check := TriCheck {
+                        text: "Track";
+                        state <=> root.track;
+                        enabled: root.create-branch && root.track-enabled;
+                    }
+                    override-check := CheckBox {
+                        text: "Override branch if exists";
+                        enabled: root.create-branch;
+                        checked <=> root.override-branch;
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                error: true;
+            }
+            OkCancel {
+                ok => {
+                    root.ok();
+                }
+                cancel => {
+                    root.cancel();
+                }
+            }
+        }
+    }
+}
+
+export component BranchTagDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Create Branch";
+    in property <bool> is-tag;
+    in property <string> head-label;
+    in property <[string]> branches;
+    in property <[string]> tags;
+    in-out property <string> name;
+    in-out property <int> mode: 0;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    in-out property <string> commit-text;
+    in-out property <int> track: 2;
+    in property <bool> track-enabled;
+    in-out property <bool> force;
+    in-out property <bool> switch-to;
+    in property <bool> switch-enabled: true;
+    in-out property <bool> sign;
+    in property <bool> sign-enabled;
+    in-out property <bool> push;
+    in-out property <string> message;
+    in property <string> notice-text;
+    callback version-changed();
+    callback name-edited();
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 500px;
+    preferred-height: 560px;
+    // The name edit is the first tab stop.
+    forward-focus: name-edit;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_NEW_BRANCH_TAG: &Name (group box), &HEAD/&Branch/&Tag/&Commit, Trac&k,
+        // &Force, &Switch to new branch, Si&gn, &Push, &Message (tag only; the branch
+        // "Description" group box has none). The branch-only and tag-only check boxes
+        // are conditional elements, so their access keys toggle without moving focus.
+        access-key(k) => {
+            if (k == "n") { name-edit.focus(); return true; }
+            if (version.access-key(k)) { return true; }
+            if (k == "f") { root.force = !root.force; force-check.focus(); return true; }
+            if (!root.is-tag) {
+                if (k == "k" && root.track-enabled) {
+                    root.track = root.track == 1 ? 0 : root.track == 0 ? 2 : 1;
+                    return true;
+                }
+                if (k == "s" && root.switch-enabled) { root.switch-to = !root.switch-to; return true; }
+            } else {
+                if (k == "g" && root.sign-enabled) { root.sign = !root.sign; return true; }
+                if (k == "p") { root.push = !root.push; return true; }
+                if (k == "m") { message-edit.focus(); return true; }
+            }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Name";
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: root.is-tag ? "Tag" : "Branch:";
+                        vertical-alignment: center;
+                    }
+                    name-edit := LineEdit {
+                        text <=> root.name;
+                        edited => {
+                            root.name-edited();
+                        }
+                        accepted => { root.ok(); }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Base On";
+                version := ChooseVersion {
+                    accepted => { root.ok(); }
+                    show-head: true;
+                    head-label: root.head-label;
+                    branches: root.branches;
+                    tags: root.tags;
+                    mode <=> root.mode;
+                    branch-index <=> root.branch-index;
+                    tag-index <=> root.tag-index;
+                    commit-text <=> root.commit-text;
+                    changed => {
+                        root.version-changed();
+                    }
+                }
+            }
+            GroupBox {
+                title: "Options";
+                VerticalLayout {
+                    spacing: 6px;
+                    if !root.is-tag: TriCheck {
+                        text: "Track";
+                        state <=> root.track;
+                        enabled: root.track-enabled;
+                    }
+                    force-check := CheckBox {
+                        text: "Force";
+                        checked <=> root.force;
+                    }
+                    if !root.is-tag: CheckBox {
+                        text: "Switch to new branch";
+                        enabled: root.switch-enabled;
+                        checked <=> root.switch-to;
+                    }
+                    if root.is-tag: CheckBox {
+                        text: "Sign";
+                        enabled: root.sign-enabled;
+                        checked <=> root.sign;
+                    }
+                    if root.is-tag: CheckBox {
+                        text: "Push";
+                        checked <=> root.push;
+                    }
+                }
+            }
+            GroupBox {
+                title: root.is-tag ? "Message" : "Description";
+                vertical-stretch: 1;
+                message-edit := TextEdit {
+                    text <=> root.message;
+                    min-height: 80px;
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                error: true;
+            }
+            OkCancel {
+                ok => {
+                    root.ok();
+                }
+                cancel => {
+                    root.cancel();
+                }
+            }
+        }
+    }
+}
+
+export component MergeDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Merge";
+    in property <string> current-branch;
+    in property <[string]> branches;
+    in property <[string]> tags;
+    in-out property <int> mode: 1;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    in-out property <string> commit-text;
+    in-out property <bool> squash;
+    in-out property <bool> use-log;
+    in-out property <int> log-count: 20;
+    in-out property <bool> no-ff;
+    in-out property <bool> ff-only;
+    in-out property <bool> no-commit;
+    in-out property <int> strategy-index;
+    in-out property <int> option-index;
+    in-out property <string> strategy-param;
+    in-out property <string> message: "<Auto Generated by Git>";
+    in property <string> notice-text;
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 520px;
+    preferred-height: 620px;
+    function squash-toggled() {
+        if (root.squash) {
+            root.no-ff = false;
+        }
+    }
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_MERGE: &Branch/&Tag/&Commit, &Squash, No &Fast Forward, Fast Forward O&nly,
+        // No Co&mmit, Merge &Message. "No Co&mmit" and "Merge &Message" share M: as in
+        // Win32, a duplicate mnemonic only cycles focus between the two controls.
+        access-key(k) => {
+            if (version.access-key(k)) { return true; }
+            if (k == "s") {
+                root.squash = !root.squash;
+                root.squash-toggled();
+                squash-check.focus();
+                return true;
+            }
+            if (k == "f" && no-ff-check.enabled) { root.no-ff = !root.no-ff; no-ff-check.focus(); return true; }
+            if (k == "n" && ff-only-check.enabled) { root.ff-only = !root.ff-only; ff-only-check.focus(); return true; }
+            if (k == "m") {
+                if (no-commit-check.has-focus && message-edit.enabled) {
+                    message-edit.focus();
+                } else {
+                    no-commit-check.focus();
+                }
+                return true;
+            }
+            false
+        }
+        VerticalBox {
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: "Current branch:";
+                    vertical-alignment: center;
+                }
+                LineEdit {
+                    text: root.current-branch;
+                    read-only: true;
+                    accepted => { root.ok(); }
+                }
+            }
+            GroupBox {
+                title: "From";
+                version := ChooseVersion {
+                    accepted => { root.ok(); }
+                    branches: root.branches;
+                    tags: root.tags;
+                    mode <=> root.mode;
+                    branch-index <=> root.branch-index;
+                    tag-index <=> root.tag-index;
+                    commit-text <=> root.commit-text;
+                }
+            }
+            GroupBox {
+                title: "Option";
+                vertical-stretch: 0;
+                VerticalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        squash-check := CheckBox {
+                            text: "Squash";
+                            checked <=> root.squash;
+                            toggled => { root.squash-toggled(); }
+                        }
+                        no-ff-check := CheckBox {
+                            text: "No Fast Forward";
+                            enabled: !root.squash && !root.ff-only;
+                            checked <=> root.no-ff;
+                        }
+                        ff-only-check := CheckBox {
+                            text: "Fast Forward Only";
+                            enabled: !root.no-ff;
+                            checked <=> root.ff-only;
+                        }
+                        no-commit-check := CheckBox {
+                            text: "No Commit";
+                            checked <=> root.no-commit;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        CheckBox {
+                            text: "Messages";
+                            checked <=> root.use-log;
+                        }
+                        SpinBox {
+                            width: 120px;
+                            enabled: root.use-log;
+                            minimum: 1;
+                            maximum: 1000;
+                            value <=> root.log-count;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: "Strategy";
+                            vertical-alignment: center;
+                        }
+                        ComboBox {
+                            model: ["", "resolve", "recursive", "ours", "subtree"];
+                            current-index <=> root.strategy-index;
+                        }
+                        ComboBox {
+                            enabled: root.strategy-index == 2;
+                            model: ["", "ours", "theirs", "patience", "ignore-space-change", "ignore-all-space", "ignore-space-at-eol", "renormalize", "no-renormalize", "rename-threshold", "subtree"];
+                            current-index <=> root.option-index;
+                        }
+                        LineEdit {
+                            enabled: root.strategy-index == 2 && (root.option-index == 9 || root.option-index == 10);
+                            text <=> root.strategy-param;
+                            accepted => { root.ok(); }
+                        }
+                    }
+                }
+            }
+            GroupBox {
+                title: "Merge Message";
+                vertical-stretch: 1;
+                message-edit := TextEdit {
+                    text <=> root.message;
+                    enabled: !root.squash;
+                    min-height: 80px;
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                error: true;
+            }
+            OkCancel {
+                ok => {
+                    root.ok();
+                }
+                cancel => {
+                    root.cancel();
+                }
+            }
+        }
+    }
+}
+
+// IDD_MERGEABORT "Abort Merge", also used for Reset type selection.
+export component AbortMergeDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Abort Merge";
+    in property <string> reminder: "In order to abort a merge progress a reset (to HEAD) is needed.";
+    // 0 Merge, 1 Mixed, 2 Hard
+    in-out property <int> reset-type: 0;
+    callback show-modified();
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 480px;
+    forward-focus: keys;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_MERGEABORT: M&erge, &Mixed, &Hard, Show modified files in &working tree.
+        access-key(k) => {
+            if (k == "e") { root.reset-type = 0; merge-radio.take-focus(); return true; }
+            if (k == "m") { root.reset-type = 1; mixed-radio.take-focus(); return true; }
+            if (k == "h") { root.reset-type = 2; hard-radio.take-focus(); return true; }
+            if (k == "w") { root.show-modified(); return true; }
+            false
+        }
+        VerticalBox {
+            Text {
+                text: root.reminder;
+                wrap: word-wrap;
+            }
+            GroupBox {
+                title: "Reset Type";
+                VerticalLayout {
+                    spacing: 6px;
+                    merge-radio := Radio {
+                        text: "Merge: Resets the index and try to reconstruct the pre-merge state";
+                        checked: root.reset-type == 0;
+                        clicked => {
+                            root.reset-type = 0;
+                        }
+                    }
+                    mixed-radio := Radio {
+                        text: "Mixed: Leave working tree untouched, reset index";
+                        checked: root.reset-type == 1;
+                        clicked => {
+                            root.reset-type = 1;
+                        }
+                    }
+                    hard-radio := Radio {
+                        text: "Hard: Reset working tree and index (discard all local changes)";
+                        checked: root.reset-type == 2;
+                        clicked => {
+                            root.reset-type = 2;
+                        }
+                    }
+                }
+            }
+            HorizontalBox {
+                padding: 0;
+                Button {
+                    text: "Show modified files in working tree";
+                    clicked => {
+                        root.show-modified();
+                    }
+                }
+                OkCancel {
+                    ok => {
+                        root.ok();
+                    }
+                    cancel => {
+                        root.cancel();
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component StashDialog inherits KoopaWindow {
+    in property <string> dialog-title: "Stash";
+    in-out property <string> message;
+    in-out property <bool> include-untracked;
+    in-out property <bool> all;
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    callback notice-clicked(int);
+    callback ok();
+    callback cancel();
+    title: root.dialog-title;
+    min-width: 440px;
+    // The message edit is the first tab stop.
+    forward-focus: message-edit;
+    keys := DialogKeys {
+        ok => { root.ok(); }
+        cancel => { root.cancel(); }
+        // IDD_STASH: Stash &Message (group box), include &untracked, --&all.
+        access-key(k) => {
+            if (k == "m") { message-edit.focus(); return true; }
+            if (k == "u" && untracked-check.enabled) {
+                root.include-untracked = !root.include-untracked;
+                untracked-check.focus();
+                return true;
+            }
+            if (k == "a" && all-check.enabled) { root.all = !root.all; all-check.focus(); return true; }
+            false
+        }
+        VerticalBox {
+            GroupBox {
+                title: "Stash Message";
+                message-edit := LineEdit {
+                    text <=> root.message;
+                    accepted => { root.ok(); }
+                }
+            }
+            GroupBox {
+                title: "Options";
+                VerticalLayout {
+                    spacing: 6px;
+                    untracked-check := CheckBox {
+                        text: "include untracked";
+                        enabled: !root.all;
+                        checked <=> root.include-untracked;
+                    }
+                    all-check := CheckBox {
+                        text: "--all";
+                        enabled: !root.include-untracked;
+                        checked <=> root.all;
+                    }
+                }
+            }
+            NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                clicked(i) => {
+                    root.notice-clicked(i);
+                }
+            }
+            OkCancel {
+                ok => {
+                    root.ok();
+                }
+                cancel => {
+                    root.cancel();
+                }
+            }
+        }
+    }
+}
+

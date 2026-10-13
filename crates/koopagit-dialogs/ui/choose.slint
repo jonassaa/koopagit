@@ -1,0 +1,151 @@
+// Shared controls: radio button and the "choose version" block (ChooseVersion.h)
+// used by Switch, Create Branch/Tag, Merge and Reset.
+import { ComboBox, LineEdit, Palette } from "std-widgets.slint";
+import { SpaceActivate } from "keys.slint";
+
+export component Radio inherits Rectangle {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback clicked();
+    min-height: 22px;
+    // Win32 radio access key: select and focus.
+    public function take-focus() { keys.focus(); }
+    HorizontalLayout {
+        spacing: 6px;
+        alignment: start;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border-width: 1px;
+                border-color: root.enabled ? Palette.foreground : #8888;
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: root.checked ? Palette.accent-background : transparent;
+                }
+            }
+        }
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.enabled ? Palette.foreground : #8888;
+        }
+    }
+    keys := SpaceActivate {
+        enabled: root.enabled;
+        activated => { root.clicked(); }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            keys.focus();
+            root.clicked();
+        }
+    }
+}
+
+export component ChooseVersion inherits VerticalLayout {
+    in property <bool> show-head;
+    in property <string> head-label: "HEAD";
+    in property <[string]> branches;
+    in property <[string]> tags;
+    // 0 HEAD, 1 Branch, 2 Tag, 3 Commit
+    in-out property <int> mode: 1;
+    in-out property <int> branch-index;
+    in-out property <int> tag-index;
+    in-out property <string> commit-text;
+    callback changed();
+    // Enter in the commit edit (the dialog presses its default button).
+    callback accepted();
+    spacing: 6px;
+
+    // "&HEAD", "&Branch", "&Tag", "&Commit" (IDD_NEW_BRANCH_TAG, IDD_GITSWITCH, IDD_MERGE, IDD_RESET).
+    public function access-key(k: string) -> bool {
+        if (k == "h" && root.show-head) { root.choose(0); return true; }
+        if (k == "b") { root.choose(1); branch-radio.take-focus(); return true; }
+        if (k == "t") { root.choose(2); tag-radio.take-focus(); return true; }
+        if (k == "c") { root.choose(3); commit-radio.take-focus(); return true; }
+        false
+    }
+    function choose(m: int) {
+        root.mode = m;
+        root.changed();
+    }
+
+    if root.show-head: Radio {
+        text: root.head-label;
+        checked: root.mode == 0;
+        clicked => {
+            root.mode = 0;
+            root.changed();
+        }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        branch-radio := Radio {
+            width: 90px;
+            text: "Branch";
+            checked: root.mode == 1;
+            clicked => {
+                root.mode = 1;
+                root.changed();
+            }
+        }
+        ComboBox {
+            model: root.branches;
+            enabled: root.mode == 1;
+            current-index <=> root.branch-index;
+            selected => {
+                root.changed();
+            }
+        }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        tag-radio := Radio {
+            width: 90px;
+            text: "Tag";
+            checked: root.mode == 2;
+            clicked => {
+                root.mode = 2;
+                root.changed();
+            }
+        }
+        ComboBox {
+            model: root.tags;
+            enabled: root.mode == 2;
+            current-index <=> root.tag-index;
+            selected => {
+                root.changed();
+            }
+        }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        commit-radio := Radio {
+            width: 90px;
+            text: "Commit";
+            checked: root.mode == 3;
+            clicked => {
+                root.mode = 3;
+                root.changed();
+            }
+        }
+        LineEdit {
+            text <=> root.commit-text;
+            enabled: root.mode == 3;
+            placeholder-text: "SHA-1 or revision";
+            edited => {
+                root.changed();
+            }
+            accepted => {
+                root.accepted();
+            }
+        }
+    }
+}
