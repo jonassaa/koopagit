@@ -101,6 +101,62 @@ pub fn under(full: &str, node: &str) -> bool {
     full.starts_with(&format!("{node}/"))
 }
 
+/// Ref kinds a picker lists (`gPickRef_*`, BrowseRefsDlg.h:28), passed as
+/// `/pickkind:<bits>`.
+pub const PICK_HEAD: u32 = 1;
+pub const PICK_TAG: u32 = 2;
+pub const PICK_REMOTE: u32 = 4;
+pub const PICK_ALL: u32 = PICK_HEAD | PICK_TAG | PICK_REMOTE;
+pub const PICK_NO_TAG: u32 = PICK_ALL & !PICK_TAG;
+
+/// Whether `full` is listed for the picker kinds `kind` (BrowseRefsDlg.cpp:462).
+pub fn pick_kind_allows(kind: u32, full: &str) -> bool {
+    let blocked = (full.starts_with("refs/heads/") && kind & PICK_HEAD == 0)
+        || (full.starts_with("refs/tags/") && kind & PICK_TAG == 0)
+        || (full.starts_with("refs/remotes/") && kind & PICK_REMOTE == 0)
+        // Only remote branches: no refs/stash either.
+        || (kind == PICK_REMOTE && !full.starts_with("refs/remotes/"));
+    !blocked
+}
+
+/// The tree node and list ref selected when the dialog opens (`Refresh` /
+/// `SelectRef`, BrowseRefsDlg.cpp:432, 513): `HEAD` is the current branch,
+/// a short name resolves like git's DWIM, and a node path selects that node.
+pub fn initial_selection(
+    refs: &[String],
+    wanted: &str,
+    current: Option<&str>,
+) -> (String, Option<String>) {
+    let fallback = || ("refs/heads".to_owned(), None);
+    let wanted = match wanted {
+        "" | "HEAD" => match current {
+            Some(c) => format!("refs/heads/{c}"),
+            None => return fallback(),
+        },
+        w => w.to_owned(),
+    };
+    let full = if wanted.starts_with("refs") {
+        wanted
+    } else {
+        let Some(f) = ["refs/", "refs/tags/", "refs/heads/", "refs/remotes/"]
+            .iter()
+            .map(|p| format!("{p}{wanted}"))
+            .find(|f| refs.contains(f))
+        else {
+            return fallback();
+        };
+        f
+    };
+    if refs.contains(&full) {
+        let node = full.rsplit_once('/').map_or("refs", |(n, _)| n).to_owned();
+        (node, Some(full))
+    } else if refs.iter().any(|r| under(r, &full)) {
+        (full, None)
+    } else {
+        fallback()
+    }
+}
+
 #[derive(Clone)]
 enum Pending {
     None,
@@ -132,6 +188,16 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     let dlg = BrowseRefsDialog::new()?;
     let workdir = ctx.repo.workdir().to_owned();
     dlg.set_dialog_title(crate::window_title(&workdir, "Browse References").into());
+    // Picker mode (`CBrowseRefsDlg::PickRef`): `/outfile:<file>` receives the
+    // chosen full ref name; `/rev:` is the initial ref, `/pickkind:` the kinds.
+    let outfile = ctx.invocation.get("outfile").map(PathBuf::from);
+    let want_pick = outfile.is_some();
+    let kind = ctx
+        .invocation
+        .get("pickkind")
+        .and_then(|k| k.parse().ok())
+        .unwrap_or(PICK_ALL);
+    let initial = ctx.invocation.get("rev").unwrap_or("HEAD").to_owned();
     let state = Rc::new(RefCell::new(State {
         refs: Vec::new(),
         nodes: Vec::new(),
@@ -243,6 +309,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             if let Ok(repo) = Repo::discover(&workdir) {
                 let mut st = state.borrow_mut();
                 st.refs = repo.ref_infos().unwrap_or_default();
+                st.refs.retain(|r| pick_kind_allows(kind, &r.full_name));
                 st.current = repo.current_branch().ok().flatten();
                 st.remotes = repo.remotes();
                 let names: Vec<String> = st.refs.iter().map(|r| r.full_name.clone()).collect();
@@ -256,8 +323,37 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         })
     };
     reload();
+    {
+        // `Refresh(m_initialRef)`: select the initial ref and its tree node.
+        let (node, leaf) = {
+            let st = state.borrow();
+            let names: Vec<String> = st.refs.iter().map(|r| r.full_name.clone()).collect();
+            initial_selection(&names, &initial, st.current.as_deref())
+        };
+        {
+            let mut st = state.borrow_mut();
+            let mut path = node.as_str();
+            while let Some((parent, _)) = path.rsplit_once('/') {
+                st.expanded.insert(parent.to_owned());
+                path = parent;
+            }
+            st.node = node;
+        }
+        paint_tree();
+        refilter();
+        let row = leaf.and_then(|leaf| {
+            let st = state.borrow();
+            st.rows.iter().position(|&i| st.refs[i].full_name == leaf)
+        });
+        if let Some(row) = row {
+            sel.click(row, false, false);
+            paint();
+        }
+    }
 
     let actions = Rc::new(Actions {
+        outfile,
+        want_pick,
         workdir: workdir.clone(),
         has_wc: true,
         state: state.clone(),
@@ -303,8 +399,9 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     }
     {
         let (sel, paint) = (sel.clone(), paint.clone());
+        // A picker selects one ref (LVS_SINGLESEL).
         dlg.on_row_clicked(move |row, toggle, range| {
-            sel.click(row as usize, toggle, range);
+            sel.click(row as usize, toggle && !want_pick, range && !want_pick);
             paint();
         });
     }
@@ -318,7 +415,10 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     {
         let (sel, paint, model) = (sel.clone(), paint.clone(), model.clone());
         dlg.on_key_step(move |delta, extend| {
-            sel.key(delta, extend, model.row_count());
+            if want_pick && delta == 0 {
+                return;
+            }
+            sel.key(delta, extend && !want_pick, model.row_count());
             paint();
         });
     }
@@ -346,9 +446,11 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     }
     {
         let a = actions.clone();
-        // Double-click: "Show log" for commits (upstream's default for a ref).
+        // Double-click: pick in a picker, else "Show log" for commits
+        // (OnNMDblclkListRefLeafs).
         dlg.on_row_activated(move |row| {
-            a.list_action(row as usize, crate::menus::ActionId::id(A::ViewLog))
+            let action = if a.want_pick { A::Select } else { A::ViewLog };
+            a.list_action(row as usize, crate::menus::ActionId::id(action))
         });
     }
     {
@@ -368,11 +470,22 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         dlg.on_rename_selected(move || a.rename_selected());
     }
     {
-        let weak = dlg.as_weak();
-        dlg.on_ok(move || {
-            if let Some(d) = weak.upgrade() {
-                let _ = d.hide();
-            }
+        let a = actions.clone();
+        // OK picks the selected ref, if exactly one (GetSelectedRef(true, false)).
+        dlg.on_ok(move || match a.selected_ref() {
+            Some(r) => a.pick(&r),
+            None => a.close(),
+        });
+    }
+    {
+        let a = actions.clone();
+        dlg.on_cancel(move || a.close());
+    }
+    {
+        let a = actions.clone();
+        dlg.on_current_branch(move || {
+            let current = a.state.borrow().current.clone();
+            a.pick(&current.map_or_else(|| "HEAD".to_owned(), |c| format!("refs/heads/{c}")));
         });
     }
     crate::snapshot::arm(&dlg);
@@ -381,6 +494,9 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
 }
 
 struct Actions {
+    /// Picker mode: where the chosen ref is written.
+    outfile: Option<PathBuf>,
+    want_pick: bool,
     workdir: PathBuf,
     has_wc: bool,
     state: Rc<RefCell<State>>,
@@ -402,6 +518,34 @@ impl Actions {
 
     fn launch(&self, command: &str) -> Invocation {
         Invocation::new(command).with_paths([self.workdir.clone()])
+    }
+
+    fn close(&self) {
+        if let Some(d) = self.weak.upgrade() {
+            let _ = d.hide();
+        }
+    }
+
+    /// Closes with `full` as the picked ref (`m_pickedRef`), written to
+    /// `/outfile` in picker mode.
+    fn pick(&self, full: &str) {
+        if let Some(file) = &self.outfile {
+            if let Err(e) = std::fs::write(file, format!("{full}\n")) {
+                eprintln!("koopagit: {e}");
+            }
+        }
+        self.close();
+    }
+
+    /// The single selected ref.
+    fn selected_ref(&self) -> Option<String> {
+        let s = self.sel.sel.borrow();
+        if s.len() != 1 {
+            return None;
+        }
+        let row = s.rows().next()?;
+        let st = self.state.borrow();
+        st.rows.get(row).map(|&i| st.refs[i].full_name.clone())
     }
 
     fn git(&self) -> Git {
@@ -437,6 +581,7 @@ impl Actions {
             has_wc: self.has_wc,
             current_branch: st.current.clone().unwrap_or_default(),
             remotes: st.remotes.clone(),
+            want_pick: false,
         }
     }
 
@@ -449,6 +594,7 @@ impl Actions {
             has_wc: self.has_wc,
             current_branch: st.current.clone().unwrap_or_default(),
             remotes: st.remotes.clone(),
+            want_pick: self.want_pick,
         })
     }
 
@@ -508,6 +654,7 @@ impl Actions {
         let name = Self::dialog_name(&r);
         let st_remotes = self.state.borrow().remotes.clone();
         match action {
+            A::Select => self.pick(&r.full_name),
             A::ViewLog => {
                 if r.is_commit {
                     spawn_launcher(&self.launch("log").with("range", name))
@@ -875,6 +1022,48 @@ mod tests {
             upstream: String::new(),
             is_commit: true,
         }
+    }
+
+    #[test]
+    fn picker_kinds_and_initial_selection() {
+        assert!(pick_kind_allows(PICK_ALL, "refs/stash"));
+        assert!(!pick_kind_allows(PICK_NO_TAG, "refs/tags/v1"));
+        assert!(pick_kind_allows(PICK_NO_TAG, "refs/remotes/origin/main"));
+        assert!(!pick_kind_allows(PICK_REMOTE, "refs/heads/main"));
+        assert!(!pick_kind_allows(PICK_REMOTE, "refs/stash"));
+        assert!(pick_kind_allows(PICK_REMOTE, "refs/remotes/origin/main"));
+
+        let refs: Vec<String> = [
+            "refs/heads/main",
+            "refs/heads/feature/a",
+            "refs/remotes/origin/main",
+            "refs/tags/v1",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        let pick = |w: &str, c: Option<&str>| initial_selection(&refs, w, c);
+        assert_eq!(
+            pick("HEAD", Some("feature/a")),
+            (
+                "refs/heads/feature".into(),
+                Some("refs/heads/feature/a".into())
+            )
+        );
+        assert_eq!(pick("HEAD", None), ("refs/heads".into(), None));
+        assert_eq!(
+            pick("v1", None),
+            ("refs/tags".into(), Some("refs/tags/v1".into()))
+        );
+        assert_eq!(
+            pick("origin/main", None),
+            (
+                "refs/remotes/origin".into(),
+                Some("refs/remotes/origin/main".into())
+            )
+        );
+        assert_eq!(pick("refs/remotes", None), ("refs/remotes".into(), None));
+        assert_eq!(pick("nope", None), ("refs/heads".into(), None));
     }
 
     #[test]

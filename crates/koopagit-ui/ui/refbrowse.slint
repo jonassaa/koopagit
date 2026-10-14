@@ -231,6 +231,9 @@ export component BrowseRefsDialog inherits KoopaWindow {
     // F2: rename the first selected branch.
     callback rename-selected();
     callback ok();
+    callback cancel();
+    // "Current Branch": picks the current branch and closes (OnBnClickedCurrentbranch).
+    callback current-branch();
 
     title: root.dialog-title;
     preferred-width: 1240px;
@@ -249,7 +252,7 @@ export component BrowseRefsDialog inherits KoopaWindow {
                 root.filter-text = "";
                 root.filter-changed();
             } else {
-                root.ok();
+                root.cancel();
             }
         }
         // CBrowseRefsDlg::PreTranslateMessage. F2 renames when the lists have focus.
@@ -390,7 +393,10 @@ export component BrowseRefsDialog inherits KoopaWindow {
             HorizontalBox {
                 padding: 0;
                 alignment: end;
+                // IDD_BROWSE_REFS: Current Branch, OK, Cancel.
+                Button { text: "Current Branch"; clicked => { root.current-branch(); } }
                 Button { text: "OK"; primary: true; clicked => { root.ok(); } }
+                Button { text: "Cancel"; clicked => { root.cancel(); } }
             }
         }
     }

@@ -1058,21 +1058,64 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             to_model(&m.finish())
         });
     }
-    {
+    // Switches the shown refs; a single range goes into the ref history.
+    let apply_mode: Rc<dyn Fn(RefMode)> = {
         let state = state.clone();
         let reload = reload.clone();
         let weak = dlg.as_weak();
         let ref_history = ref_history.clone();
         let workdir = workdir.clone();
-        let mut settings = settings.clone();
+        let settings = RefCell::new(settings.clone());
         let ref_history_key = ref_history_key.clone();
-        dlg.on_ref_menu_action(move |id| {
+        Rc::new(move |mode| {
             let Some(d) = weak.upgrade() else { return };
-            let mode = match id {
-                1 => {
-                    spawn_launcher(&Invocation::new("refbrowse").with_paths([workdir.clone()]));
-                    return;
+            if let RefMode::Range(r) = &mode {
+                let mut s = settings.borrow_mut();
+                s.push_history(&ref_history_key, "ref", r, 5);
+                let _ = s.save();
+                *ref_history.borrow_mut() = s.history(&ref_history_key, "ref");
+            }
+            let branch = Repo::discover_including_bare(&workdir)
+                .ok()
+                .and_then(|r| r.current_branch().ok().flatten());
+            d.set_ref_label(mode.label(branch.as_deref()).into());
+            d.set_all_branches(mode == RefMode::All);
+            state.borrow_mut().mode = mode;
+            reload();
+        })
+    };
+    // OnBnClickedBrowseRef (LogDlg.cpp:3271): pick a ref, starting at the
+    // shown range, and show its log.
+    let browse_refs: Rc<dyn Fn()> = {
+        let state = state.clone();
+        let weak = dlg.as_weak();
+        let workdir = workdir.clone();
+        Rc::new(move || {
+            let initial = match &state.borrow().mode {
+                RefMode::Range(r) => r.clone(),
+                _ => "HEAD".to_owned(),
+            };
+            let inv = Invocation::new("refbrowse")
+                .with_paths([workdir.clone()])
+                .with("rev", initial);
+            let weak = weak.clone();
+            crate::pick::launcher_picker(inv, move |full| {
+                if let Some(d) = weak.upgrade() {
+                    d.invoke_ref_picked(full.into());
                 }
+            });
+        })
+    };
+    {
+        let apply_mode = apply_mode.clone();
+        dlg.on_ref_picked(move |full| apply_mode(RefMode::Range(full.to_string())));
+    }
+    {
+        let ref_history = ref_history.clone();
+        let browse_refs = browse_refs.clone();
+        dlg.on_ref_menu_action(move |id| {
+            let mode = match id {
+                1 => return browse_refs(),
                 2 => RefMode::Head,
                 3 => RefMode::Range("FETCH_HEAD".into()),
                 4 => RefMode::All,
@@ -1083,26 +1126,10 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                     None => return,
                 },
             };
-            if let RefMode::Range(r) = &mode {
-                settings.push_history(&ref_history_key, "ref", r, 5);
-                let _ = settings.save();
-                *ref_history.borrow_mut() = settings.history(&ref_history_key, "ref");
-            }
-            let branch = Repo::discover_including_bare(&workdir)
-                .ok()
-                .and_then(|r| r.current_branch().ok().flatten());
-            d.set_ref_label(mode.label(branch.as_deref()).into());
-            d.set_all_branches(mode == RefMode::All);
-            state.borrow_mut().mode = mode;
-            reload();
+            apply_mode(mode);
         });
     }
-    {
-        let workdir = workdir.clone();
-        dlg.on_browse_refs(move || {
-            spawn_launcher(&Invocation::new("refbrowse").with_paths([workdir.clone()]));
-        });
-    }
+    dlg.on_browse_refs(move || browse_refs());
 
     // From date menu (LogDlg.cpp:1458-1533).
     {

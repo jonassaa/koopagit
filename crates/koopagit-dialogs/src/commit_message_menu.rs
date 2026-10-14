@@ -34,32 +34,6 @@ fn insert(dlg: &CommitDialog, text: &str) {
     }
 }
 
-/// Runs `/command:log /outfile:<tmp>` (single-select picker) in the background
-/// and calls `done` with the chosen commit id.
-fn pick_commit(workdir: PathBuf, done: impl FnOnce(String) + Send + 'static) {
-    let out = std::env::temp_dir().join(format!(
-        "koopagit-pick-{}-{}.txt",
-        std::process::id(),
-        crate::format::now()
-    ));
-    let inv = Invocation::new("log")
-        .with_paths([workdir])
-        .with("outfile", out.to_string_lossy());
-    let exe = std::env::current_exe().unwrap_or_else(|_| "koopagit-proc".into());
-    std::thread::spawn(move || {
-        let status = std::process::Command::new(exe).args(inv.to_args()).status();
-        let picked = std::fs::read_to_string(&out).unwrap_or_default();
-        let _ = std::fs::remove_file(&out);
-        let id = picked
-            .split_whitespace()
-            .find(|w| w.len() >= 7 && w.chars().all(|c| c.is_ascii_hexdigit()))
-            .map(str::to_owned);
-        if let (Ok(_), Some(id)) = (status, id) {
-            done(id);
-        }
-    });
-}
-
 /// Wires the menu. `history` is the commit-message history (newest first);
 /// `checked_rows` returns `(status name, path)` of the checked file rows.
 pub fn wire(
@@ -118,7 +92,9 @@ pub fn wire(
                 let weak = d.as_weak();
                 let wd = workdir.clone();
                 let want_message = action == A::PickCommitMessage;
-                pick_commit(workdir.clone(), move |id| {
+                // `/command:log /outfile:<tmp>`: a single-select commit picker.
+                let inv = Invocation::new("log").with_paths([workdir.clone()]);
+                crate::pick::launcher_picker(inv, move |id| {
                     let text = if want_message {
                         koopagit_core::git_cli::Git::new(&wd)
                             .run(["log", "-1", "--format=%B", &id])
@@ -127,7 +103,9 @@ pub fn wire(
                     } else {
                         id
                     };
-                    let _ = weak.upgrade_in_event_loop(move |d| insert(&d, &text));
+                    if let Some(d) = weak.upgrade() {
+                        insert(&d, &text);
+                    }
                 });
             }
         }

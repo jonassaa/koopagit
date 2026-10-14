@@ -134,6 +134,8 @@ export component LogDialog inherits KoopaWindow {
     pure callback ref-menu() -> [MenuBlock];
     callback ref-menu-action(int);
     callback browse-refs();
+    // The Browse References picker returned a ref (OnBnClickedBrowseRef).
+    callback ref-picked(string);
     pure callback from-menu() -> [MenuBlock];
     callback from-menu-action(int);
     pure callback message-menu(bool) -> [MenuBlock];

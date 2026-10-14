@@ -30,6 +30,8 @@ menu_actions! {
         CreateTag = 22,
         DeleteAllTags = 23,
         Copy = 24,
+        /// Picker mode: choose this ref (`eCmd_Select`).
+        Select = 25,
     }
 }
 
@@ -64,6 +66,8 @@ pub struct RefMenuInput {
     pub current_branch: String,
     /// Configured remotes.
     pub remotes: Vec<String>,
+    /// The dialog is a ref picker (`m_bWantPick`).
+    pub want_pick: bool,
 }
 
 /// `refs/remotes/<remote>/<branch>` split on a configured remote (longest match).
@@ -93,6 +97,10 @@ pub fn build(i: &RefMenuInput) -> Vec<Entry> {
         let l = &leaves[0];
         let is_head = l.full.starts_with("refs/heads/");
         let is_remote = l.full.starts_with("refs/remotes/");
+        if i.want_pick {
+            m.item(A::Select, "Select");
+            m.sep();
+        }
         m.item_if(l.is_commit, A::ViewLog, "Show &log");
         m.item(A::RepoBrowser, "&Browse repository");
         m.item_if(is_head || is_remote, A::ShowReflog, "Show &RefLog");
@@ -314,7 +322,20 @@ mod tests {
             has_wc: true,
             current_branch: "main".into(),
             remotes: vec!["origin".into(), "origin/x".into()],
+            want_pick: false,
         }
+    }
+
+    #[test]
+    fn picker_menu_starts_with_select() {
+        let mut i = input(vec![leaf("refs/heads/feature")]);
+        assert_ne!(titles(&build(&i))[0], "Select");
+        i.want_pick = true;
+        let t = titles(&build(&i));
+        assert_eq!(t[..3], ["Select", "---", "Show log"]);
+        // Not for several refs.
+        i.leaves.push(leaf("refs/heads/main"));
+        assert!(!titles(&build(&i)).contains(&"Select".to_owned()));
     }
 
     #[test]
