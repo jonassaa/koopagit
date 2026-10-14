@@ -1,6 +1,6 @@
 // CSubmoduleAddDlg (IDD_SUBMODULE_ADD, "Submodule Add") and
 // CRequestPullDlg (IDD_REQUESTPULL, "Request pull").
-import { Button, CheckBox, LineEdit, GroupBox, VerticalBox, HorizontalBox, TextEdit } from "std-widgets.slint";
+import { Button, CheckBox, LineEdit, GroupBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { EditCombo } from "remote_widgets.slint";
 import { NoticeBar } from "msgbox.slint";
 import { KoopaWindow } from "window.slint";
@@ -129,39 +129,6 @@ export component RequestPullDialog inherits KoopaWindow {
                 alignment: end;
                 Button { text: "OK"; primary: true; clicked => { root.ok(); } }
                 Button { text: "Cancel"; clicked => { root.cancel(); } }
-            }
-        }
-    }
-}
-
-// The generated pull request (upstream opens it in the alternative editor).
-export component TextResultDialog inherits KoopaWindow {
-    in property <string> dialog-title;
-    in property <string> text;
-    in property <string> status;
-    callback copy();
-    callback save();
-    callback close-dialog();
-
-    title: root.dialog-title;
-    preferred-width: 680px;
-    preferred-height: 480px;
-    min-width: 420px;
-    min-height: 260px;
-
-    // Close is the default button; Escape closes too.
-    forward-focus: keys;
-    keys := DialogKeys {
-        ok => { root.close-dialog(); }
-        cancel => { root.close-dialog(); }
-        VerticalBox {
-            TextEdit { text: root.text; read-only: true; wrap: no-wrap; font-size: 12px; vertical-stretch: 1; }
-            HorizontalBox {
-                padding: 0;
-                Text { text: root.status; vertical-alignment: center; color: #888; horizontal-stretch: 1; }
-                Button { text: "Copy"; clicked => { root.copy(); } }
-                Button { text: "Save..."; clicked => { root.save(); } }
-                Button { text: "Close"; primary: true; clicked => { root.close-dialog(); } }
             }
         }
     }

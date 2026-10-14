@@ -447,7 +447,7 @@ fn submodule_add_keys() {
 }
 
 #[test]
-fn request_pull_and_result_keys() {
+fn request_pull_keys() {
     init();
     let dlg = RequestPullDialog::new().unwrap();
     let (ok, on_ok) = counter();
@@ -459,14 +459,6 @@ fn request_pull_and_result_keys() {
     assert_eq!(ok.get(), 1);
     press(dlg.window(), K::Escape);
     assert_eq!(cancel.get(), 1);
-
-    let res = TextResultDialog::new().unwrap();
-    let (closed, on_close) = counter();
-    res.on_close_dialog(on_close);
-    res.show().unwrap();
-    press(res.window(), K::Return);
-    press(res.window(), K::Escape);
-    assert_eq!(closed.get(), 2);
 }
 
 // ---------------------------------------------------------------- git-svn, Send Mail

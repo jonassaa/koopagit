@@ -12,10 +12,7 @@ use slint::ComponentHandle;
 
 use crate::progress::ProgressJob;
 use crate::remote_util::{merged, strings, wd_key};
-use crate::{
-    Context, DialogResult, RequestPullDialog, SubmoduleAddDialog, TextResultDialog, msgbox,
-    spawn_launcher,
-};
+use crate::{Context, DialogResult, RequestPullDialog, SubmoduleAddDialog, msgbox, spawn_launcher};
 
 /// The OK button's decision, read after the dialog closed.
 type Decision<T> = Rc<RefCell<Option<T>>>;
@@ -261,60 +258,7 @@ pub fn request_pull(ctx: &mut Context) -> DialogResult<i32> {
         spawn_launcher(&Invocation::new("sendmail").with_paths([file]));
         return Ok(0);
     }
-    show_text(&ctx.window_title("Request pull"), &out.stdout, &file)?;
+    // AppUtils.cpp:3011.
+    crate::editor::launch(&file)?;
     Ok(0)
-}
-
-/// Shows generated text with Copy / Save... buttons.
-pub fn show_text(title: &str, text: &str, file: &Path) -> DialogResult {
-    let dlg = TextResultDialog::new()?;
-    dlg.set_dialog_title(title.into());
-    dlg.set_text(text.into());
-    dlg.set_status(file.to_string_lossy().as_ref().into());
-    {
-        let text = text.to_owned();
-        let weak = dlg.as_weak();
-        dlg.on_copy(move || {
-            if let Some(d) = weak.upgrade() {
-                let ok = crate::clipboard::copy(&text);
-                d.set_status(
-                    if ok {
-                        "Copied to clipboard."
-                    } else {
-                        "Could not access the clipboard."
-                    }
-                    .into(),
-                );
-            }
-        });
-    }
-    {
-        let text = text.to_owned();
-        let weak = dlg.as_weak();
-        dlg.on_save(move || {
-            if let Some(p) = crate::pick::save_file("Save", None, "pullrequest.txt") {
-                let res = std::fs::write(&p, &text);
-                if let Some(d) = weak.upgrade() {
-                    d.set_status(
-                        match res {
-                            Ok(()) => p.to_string_lossy().into_owned(),
-                            Err(e) => e.to_string(),
-                        }
-                        .into(),
-                    );
-                }
-            }
-        });
-    }
-    {
-        let weak = dlg.as_weak();
-        dlg.on_close_dialog(move || {
-            if let Some(d) = weak.upgrade() {
-                let _ = d.hide();
-            }
-        });
-    }
-    crate::snapshot::arm(&dlg);
-    dlg.run()?;
-    Ok(())
 }

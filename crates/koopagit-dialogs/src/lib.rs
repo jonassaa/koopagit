@@ -8,6 +8,7 @@ pub mod applypatch;
 pub mod clone;
 pub mod commit;
 pub mod diffcmd;
+pub mod editor;
 pub mod export;
 pub mod filediff;
 pub mod filelist;

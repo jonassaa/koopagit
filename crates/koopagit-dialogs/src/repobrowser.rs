@@ -405,15 +405,10 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                         }
                         EntryKind::File => match repo.extract_blob(&rev, &e.path) {
                             Ok(file) => {
-                                let editor = settings.string("AlternativeEditor", "");
+                                // `CRepositoryBrowser::OpenFile` (RepositoryBrowser.cpp:1304).
                                 let res = if action == RepoBrowserAction::OpenWithAlternativeEditor
-                                    && !editor.is_empty()
-                                    && !editor.starts_with('#')
                                 {
-                                    std::process::Command::new(&editor)
-                                        .arg(&file)
-                                        .spawn()
-                                        .map(|_| ())
+                                    crate::editor::launch(&file)
                                 } else {
                                     crate::osopen::open(&file)
                                 };

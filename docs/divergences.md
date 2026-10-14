@@ -51,7 +51,7 @@ platform forces a change.
 | Icon Overlays | "Show overlays and context menu only in explorer", drive-type checkboxes. | Omitted. | Windows-only concepts. |
 | General | "Git for Windows" group, Check now / First Start Wizard / Create Library buttons, browse button. | Group titled "Git" outside Windows; those buttons are absent. | Windows-only or not implemented yet. |
 | Remote page | Putty Key field. | Shown only on Windows. | PuTTY is Windows-only. |
-| Config file editing | Opens the "Alternative editor". | Opens the OS default text editor. | Alternative editor page is a stub. |
+| Alternative editor fallback | With no alternative editor configured, config files, "View revision in alternative editor" and the Request pull result open in Notepad. | They open in the platform's default text editor (`open -t` on macOS, `xdg-open` on Linux; Notepad on Windows). | Notepad is Windows-only. |
 | Diff Viewer | Per-extension "Advanced..." dialog. | Not offered in the UI (the `DiffTools\.<ext>` / `MergeTools\.<ext>` settings are honoured). | Not implemented yet. |
 | Stub pages | Credential, Issue Tracker Integration (COM providers), Icon Set. | Show "Not available in KoopaGit yet." | Credential helpers are set by the First Start Wizard; providers and icon sets are Windows-specific. |
 | Small UI differences | Tri-state "Select/deselect all"; hierarchical-config hint box. | Plain button; no hint box. Switching config level discards unsaved edits on that page. | Slint widget set. |
@@ -102,7 +102,6 @@ platform forces a change.
 | Column-specific copy | "Copy to clipboard ▸ column '<name>'" for the right-clicked column. | Not offered. | Slint list rows don't report which column was clicked. |
 | Shift while choosing | Holding Shift when picking a diff entry uses the alternative diff tool; Shift+Delete deletes permanently. | Shift is only read when the menu opens (it still reveals "Add as Executable/Symlink"). | Slint menu activation carries no modifier state. |
 | Confirmations | Modal message boxes. | Non-blocking message boxes (`msgbox::ask_async`). | Slint has no nested modal event loop. |
-| "View revision in alternative editor" | Uses the Alternative editor setting. | Opens with the OS default application. | The Alternative editor settings page is a stub. |
 | "Open with..." | Windows "Open with" dialog. | Windows: same dialog; macOS/Linux: pick an application, then open the file with it. | No cross-platform "Open with" chooser. |
 | Recycle bin on revert | Moves the working-tree file to the Recycle Bin before reverting. | Moves a copy of the file to the OS trash, then reverts. | Same recoverability with the `trash` crate. |
 | "Restore after commit" | After a successful commit the marked files are restored silently; after a failed commit, or on Cancel, the user picks "Restore old state" / "Keep current state" (plus Cancel). | Same. The failed-commit question is a message box; the Cancel-time question is shown in the Commit dialog's notice bar. | Slint does not support nested modal event loops. |
@@ -136,7 +135,6 @@ platform forces a change.
 | Worktree lock reason | libgit2 lock without a reason. | `git worktree lock` (no reason prompt either). | Same behaviour via the CLI. |
 | Submodule Add | Clipboard `git clone <url>` prefill, PuTTY key. | Not offered. | Clipboard read not wired; PuTTY is Windows-only. |
 | Submodule Add `--force` | Quirk: `--force` replaces `-b <branch>`. | Kept. | Parity. |
-| Request pull result | Opens the text in the alternative editor. | Shown in a read-only window with Copy and Save... | Alternative editor page is a stub. |
 | Repository Browser tree | Native tree view; revision chosen through the log dialog; drag & drop out of the browser. | Indented folder list with expand arrows; revision typed or picked from branches/tags; no drag & drop. | Slint has no tree view or drag-out; no log picker yet. |
 | Repository Browser "Open with..." | Windows "Open with" dialog. | Same as Open (default application). | No portable "open with" chooser. |
 | Recycle bin | Revert and Clean move files to the recycle bin (`RevertWithRecycleBin`). | Same, using the platform trash (`trash` crate). Clean's recycle mode runs `git clean -n` and trashes the listed paths (also inside submodules when "Submodules" is checked). | — |
