@@ -642,7 +642,26 @@ const SPECS: &[Spec] = &[
             ),
         ],
     ),
-    spec("refbrowse", "Open the Browse References dialog", REPO, &[]),
+    spec(
+        "refbrowse",
+        "Open the Browse References dialog",
+        REPO,
+        &[
+            value("rev", "rev", "REF", "Select this ref when the dialog opens"),
+            value(
+                "outfile",
+                "out-file",
+                "FILE",
+                "Pick a ref: on OK, write its full name to this file",
+            ),
+            value(
+                "pickkind",
+                "pick-kind",
+                "BITS",
+                "Refs to list when picking: 1 branches, 2 tags, 4 remote branches (default 7)",
+            ),
+        ],
+    ),
     spec(
         "reflog",
         "Open the RefLog dialog",

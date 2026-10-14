@@ -228,8 +228,10 @@ fn browse_refs_keys() {
     let (renamed, on_rename) = counter();
     let (filtered, on_filter) = counter();
     let (input_cancelled, on_input_cancel) = counter();
+    let (cancelled, on_cancel) = counter();
     let (steps, on_step) = recorder();
     dlg.on_ok(on_ok);
+    dlg.on_cancel(on_cancel);
     dlg.on_refresh(on_refresh);
     dlg.on_rename_selected(on_rename);
     dlg.on_filter_changed(on_filter);
@@ -252,17 +254,17 @@ fn browse_refs_keys() {
     // F2 only renames from the lists.
     press(w, K::F2);
     assert_eq!(renamed.get(), 1);
-    // Escape in the filter clears it first, then closes.
+    // Escape in the filter clears it first, then cancels (a picker picks nothing).
     let before = filtered.get();
     press(w, K::Escape);
     assert_eq!(dlg.get_filter_text(), "");
-    assert_eq!((filtered.get(), ok.get()), (before + 1, 0));
+    assert_eq!((filtered.get(), cancelled.get()), (before + 1, 0));
     press(w, K::Escape);
-    assert_eq!(ok.get(), 1);
+    assert_eq!((cancelled.get(), ok.get()), (1, 0));
     // An open rename prompt takes Escape.
     dlg.set_input_label("Rename".into());
     press(w, K::Escape);
-    assert_eq!((input_cancelled.get(), ok.get()), (1, 1));
+    assert_eq!((input_cancelled.get(), cancelled.get()), (1, 1));
 }
 
 #[test]

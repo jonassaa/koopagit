@@ -9,6 +9,7 @@ use koopagit_core::git_cli::Git;
 use koopagit_core::launcher::{CloseOnEnd, Invocation};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
+use crate::menus::refbrowse::strip_ref_name;
 use crate::progress::ProgressJob;
 use crate::refs::Versions;
 use crate::remote_util::{strings, wd_key};
@@ -296,6 +297,64 @@ pub fn format_patch(ctx: &mut Context) -> DialogResult<i32> {
                 d.set_dir(p.to_string_lossy().as_ref().into());
             }
         });
+    }
+    {
+        // OnBnClickedButtonRef: `PickRefForCombo(m_cSince, gPickRef_NoTag)`.
+        let weak = dlg.as_weak();
+        let workdir = repo.workdir().to_owned();
+        dlg.on_pick_since(move || {
+            let Some(d) = weak.upgrade() else { return };
+            let current = d.get_since().trim().to_owned();
+            let inv = Invocation::new("refbrowse")
+                .with_paths([workdir.clone()])
+                .with(
+                    "rev",
+                    if current.is_empty() {
+                        "HEAD".to_owned()
+                    } else {
+                        current
+                    },
+                )
+                .with("pickkind", crate::refbrowse::PICK_NO_TAG.to_string());
+            let weak = weak.clone();
+            crate::pick::launcher_picker(inv, move |full| {
+                if let Some(d) = weak.upgrade() {
+                    d.set_since(strip_ref_name(&full).into());
+                    d.set_mode(0);
+                }
+            });
+        });
+    }
+    for to in [false, true] {
+        // OnBnClickedButtonFrom / To: a single-select Log picker.
+        let weak = dlg.as_weak();
+        let workdir = repo.workdir().to_owned();
+        let pick = move || {
+            let Some(d) = weak.upgrade() else { return };
+            let current = if to { d.get_to() } else { d.get_from() };
+            let mut inv = Invocation::new("log").with_paths([workdir.clone()]);
+            if !current.trim().is_empty() {
+                inv = inv
+                    .with("range", current.trim())
+                    .with("rev", current.trim());
+            }
+            let weak = weak.clone();
+            crate::pick::launcher_picker(inv, move |id| {
+                if let Some(d) = weak.upgrade() {
+                    if to {
+                        d.set_to(id.into());
+                    } else {
+                        d.set_from(id.into());
+                    }
+                    d.set_mode(2);
+                }
+            });
+        };
+        if to {
+            dlg.on_pick_to(pick);
+        } else {
+            dlg.on_pick_from(pick);
+        }
     }
     {
         let workdir = repo.workdir().to_owned();
