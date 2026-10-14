@@ -979,7 +979,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         let weak = dlg.as_weak();
         let min_len = settings.dword("ShortHashLengthForHyperLinkInLogMessage", 7) as usize;
         dlg.on_paste_hash(move || {
-            let Some(text) = logactions::clipboard_text() else {
+            let Some(text) = crate::clipboard::text() else {
                 return;
             };
             let Some(prefix) = logtools::pasted_hash(&text, min_len) else {

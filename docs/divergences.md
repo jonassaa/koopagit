@@ -36,7 +36,6 @@ platform forces a change.
 - **PuTTY key / Pageant** ("Autoload Putty Key", "Load Putty Key", `remote.<name>.puttykeyfile`): omitted. PuTTY and Pageant are Windows-only; on every platform KoopaGit relies on git's own SSH configuration (ssh-agent, `core.sshCommand`).
 - **Clone from SVN** (`git svn clone` options): omitted for now; git-svn support is out of the initial scope.
 - **Clone repository-browser button**: omitted. The directory "Browse..." button uses the native folder picker (`rfd`).
-- **Clipboard prefill** of URLs (`git clone <url>` / `git pull` links on the clipboard): omitted; no clipboard API in the core dialogs yet.
 - **Radio buttons** are rendered as mutually exclusive check boxes (Slint's standard widgets have no radio button).
 - **Sync dialog**: Push notes, Compare tags, Ref List, the Submodule and Stash split buttons, and Apply/Email Patch are not implemented yet. Shift+click shortcuts to the full Pull/Fetch/Push dialogs are not available.
 - **Sync In/Out ChangeList tabs**: filled when the dialog opens or the refs change, from the merge base of the local and remote branch (In: merge base → remote; Out: merge base → local). Upstream fills In ChangeList only after a pull/fetch, from the old and new remote hash. The Conflicts tab is not implemented.
@@ -133,7 +132,7 @@ platform forces a change.
 | Apply Patches list | Drag & drop of patch files; patch list context menu. | Add button (native file picker) only. | Not implemented yet. |
 | Import patch outside a repository | `ChooseRepository` folder dialog. | Current directory first, then a native folder picker. | Same flow, platform picker. |
 | Worktree lock reason | libgit2 lock without a reason. | `git worktree lock` (no reason prompt either). | Same behaviour via the CLI. |
-| Submodule Add | Clipboard `git clone <url>` prefill, PuTTY key. | Not offered. | Clipboard read not wired; PuTTY is Windows-only. |
+| Submodule Add | PuTTY key. | Not offered. | PuTTY is Windows-only. |
 | Submodule Add `--force` | Quirk: `--force` replaces `-b <branch>`. | Kept. | Parity. |
 | Repository Browser tree | Native tree view; revision chosen through the log dialog; drag & drop out of the browser. | Indented folder list with expand arrows; revision typed or picked from branches/tags; no drag & drop. | Slint has no tree view or drag-out; no log picker yet. |
 | Repository Browser "Open with..." | Windows "Open with" dialog. | Same as Open (default application). | No portable "open with" chooser. |

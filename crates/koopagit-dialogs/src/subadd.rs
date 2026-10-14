@@ -11,7 +11,7 @@ use koopagit_core::settings::keys;
 use slint::ComponentHandle;
 
 use crate::progress::ProgressJob;
-use crate::remote_util::{merged, strings, wd_key};
+use crate::remote_util::{clone_url_from_clipboard, merged, strings, wd_key};
 use crate::{Context, DialogResult, RequestPullDialog, SubmoduleAddDialog, msgbox, spawn_launcher};
 
 /// The OK button's decision, read after the dialog closed.
@@ -45,6 +45,14 @@ pub fn submodule_add(ctx: &mut Context) -> DialogResult<i32> {
     dlg.set_repository_history(strings(&repos));
     dlg.set_path_history(strings(&paths));
     dlg.set_path(base.clone().into());
+    // SubmoduleAddDlg.cpp:108: a link on the clipboard, else the history.
+    // Like SetWindowText/SetCurSel this does not update the path.
+    if let Some(url) = crate::clipboard::text()
+        .and_then(|t| clone_url_from_clipboard(&t))
+        .or_else(|| repos.first().cloned())
+    {
+        dlg.set_repository(url.into());
+    }
 
     {
         let weak = dlg.as_weak();

@@ -39,6 +39,8 @@ export component PullFetchDialog inherits KoopaWindow {
     in property <bool> notice-error;
     callback notice-clicked(int);
     callback remote-changed();
+    // "Arbitrary URL" was chosen: prefill from the clipboard (OnBnClickedRd).
+    callback url-chosen();
     callback manage();
     callback ok();
     callback cancel();
@@ -54,7 +56,7 @@ export component PullFetchDialog inherits KoopaWindow {
         // IDD_PULLFETCH captions (AutoLoad Putty Key is not implemented).
         access-key(k) => {
             if (k == "r") { root.use-url = false; root.remote-changed(); remote-radio.take-focus(); return true; }
-            if (k == "u") { root.use-url = true; root.remote-changed(); url-radio.take-focus(); return true; }
+            if (k == "u") { root.use-url = true; root.url-chosen(); root.remote-changed(); url-radio.take-focus(); return true; }
             if (k == "b") { if (branch-combo.enabled) { branch-combo.focus(); } return true; }
             if (k == "s") {
                 if (squash-check.enabled) { root.squash = !root.squash; squash-check.focus(); }
@@ -104,7 +106,7 @@ export component PullFetchDialog inherits KoopaWindow {
                             text: "Arbitrary URL:";
                             width: 120px;
                             checked: root.use-url;
-                            clicked => { root.use-url = true; root.remote-changed(); }
+                            clicked => { root.use-url = true; root.url-chosen(); root.remote-changed(); }
                         }
                         EditCombo {
                             accepted => { root.ok(); }
