@@ -63,6 +63,10 @@ fn merge_exit_save_and_use_left_block() {
     dlg.set_can_save(true);
     ctrl(w, "s");
     assert_eq!(saved.get(), 1);
+    // With unsaved edits the exit keys still ask to close; the controller
+    // shows the save question (CheckForSave).
+    press(w, K::Escape);
+    assert_eq!(closed.get(), 4);
     // Ctrl+Shift+S is Save As, which KoopaGit does not have.
     chord(w, [K::Control, K::Shift], "S");
     assert_eq!(saved.get(), 1);

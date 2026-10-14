@@ -93,7 +93,12 @@ export component DiffViewer inherits KoopaWindow {
     callback save();
     // F12 / Alt+Right: the current difference's left block replaces the right one.
     callback use-left-block();
+    // Exit request; Rust asks to save unsaved modifications first.
     callback close-viewer();
+    // The exit question (CheckForSave).
+    in property <string> notice-text;
+    in property <[string]> notice-buttons;
+    callback notice-clicked(int);
 
     title: root.dialog-title;
     preferred-width: 1100px;
@@ -109,10 +114,8 @@ export component DiffViewer inherits KoopaWindow {
         key-pressed(e) => {
             if (ViewerKeys.next-difference(ViewerKeys.chord(e))) { root.next-difference(); return accept; }
             if (ViewerKeys.previous-difference(ViewerKeys.chord(e))) { root.previous-difference(); return accept; }
-            // Upstream asks to save first; without that prompt the exit keys
-            // leave unsaved edits alone (use Save or the Close button).
             if (ViewerKeys.merge-exit(ViewerKeys.chord(e))) {
-                if (!root.can-save) { root.close-viewer(); }
+                root.close-viewer();
                 return accept;
             }
             if (ViewerKeys.chord(e) == "Ctrl+s") {
@@ -189,6 +192,12 @@ export component DiffViewer inherits KoopaWindow {
                     }
                 }
             }
+            // Only while asking, so the list keeps its height otherwise.
+            if root.notice-text != "": NoticeBar {
+                text: root.notice-text;
+                buttons: root.notice-buttons;
+                clicked(i) => { root.notice-clicked(i); }
+            }
             Text { text: root.status-text; }
         }
     }
@@ -247,7 +256,7 @@ export component ConflictViewer inherits KoopaWindow {
             if (ViewerKeys.next-difference(ViewerKeys.chord(e)) || ViewerKeys.chord(e) == Key.F8) { root.next-conflict(); return accept; }
             if (ViewerKeys.previous-difference(ViewerKeys.chord(e)) || ViewerKeys.chord(e) == "Shift+" + Key.F8) { root.previous-conflict(); return accept; }
             if (ViewerKeys.merge-exit(ViewerKeys.chord(e))) {
-                if (!root.modified) { root.close-viewer(); }
+                root.close-viewer();
                 return accept;
             }
             if (ViewerKeys.chord(e) == "Ctrl+s") {
