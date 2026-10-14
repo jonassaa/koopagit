@@ -7,6 +7,7 @@ packaged in `KoopaGit.app` together with the Rust binaries.
 KoopaGit.app/Contents/MacOS/KoopaGit          host app; runs menu actions (request files / `KoopaGit invoke ...`)
 KoopaGit.app/Contents/MacOS/koopagit-shell    menus + statuses (JSON / TSV)
 KoopaGit.app/Contents/MacOS/koopagit-proc     the dialogs
+KoopaGit.app/Contents/MacOS/koopagit-merge    KoopaGitMerge (diff / conflict / patch viewer)
 KoopaGit.app/Contents/PlugIns/KoopaGitFinderSync.appex
 ```
 

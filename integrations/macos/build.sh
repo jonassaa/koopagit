@@ -17,7 +17,7 @@ arch=$(uname -m)
 target="$arch-apple-macos12.0"
 sdk=$(xcrun --sdk macosx --show-sdk-path)
 
-cargo build --release --manifest-path "$root/Cargo.toml" -p koopagit-shell -p koopagit-proc
+cargo build --release --manifest-path "$root/Cargo.toml" -p koopagit-shell -p koopagit-proc -p koopagit-merge
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$appex/Contents/MacOS"
@@ -27,7 +27,9 @@ cp "$here/Host/Info.plist" "$app/Contents/Info.plist"
 cp "$here/Host/AppIcon.icns" "$app/Contents/Resources/"
 xcrun swiftc -O -sdk "$sdk" -target "$target" \
     -o "$app/Contents/MacOS/KoopaGit" "$here/Host/main.swift"
-cp "$root/target/release/koopagit-shell" "$root/target/release/koopagit-proc" "$app/Contents/MacOS/"
+for bin in koopagit-shell koopagit-proc koopagit-merge; do
+    cp "$root/target/release/$bin" "$app/Contents/MacOS/"
+done
 
 # Finder Sync extension (an app extension's entry point is NSExtensionMain).
 # -parse-as-library: otherwise the single file is compiled as a script whose
@@ -40,7 +42,8 @@ xcrun swiftc -O -sdk "$sdk" -target "$target" -parse-as-library \
     -o "$appex/Contents/MacOS/KoopaGitFinderSync" "$here/FinderSync/FinderSync.swift"
 
 # Sign inside-out: helpers, extension (sandboxed), then the app.
-codesign --force --sign - "$app/Contents/MacOS/koopagit-shell" "$app/Contents/MacOS/koopagit-proc"
+codesign --force --sign - "$app/Contents/MacOS/koopagit-shell" "$app/Contents/MacOS/koopagit-proc" \
+    "$app/Contents/MacOS/koopagit-merge"
 codesign --force --sign - --entitlements "$here/FinderSync/FinderSync.entitlements" "$appex"
 codesign --force --sign - "$app"
 
