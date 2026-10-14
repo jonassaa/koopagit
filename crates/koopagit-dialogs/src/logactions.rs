@@ -5,7 +5,7 @@
 //! Everything here runs inside another dialog's event loop, so confirmations,
 //! progress windows and the notes editor are non-blocking windows.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use koopagit_core::Repo;
@@ -443,24 +443,7 @@ impl LogActions {
     /// Unified diff of a merge against all parents (`-m`), the combined diff
     /// (`--cc`), or the changes the merge itself introduced.
     fn combined_diff(&self, e: &LogEntry, k: u32) {
-        let args: Vec<&str> = match k {
-            ALL_PARENTS => vec!["diff-tree", "-p", "-m", "--no-commit-id", "-r"],
-            ONLY_MERGED => vec!["diff-tree", "-p", "--cc", "--no-commit-id"],
-            _ => vec!["diff-tree", "-p", "--cc", "--no-commit-id"],
-        };
-        let mut full: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
-        full.push(e.id.clone());
-        let text = self.git().run(full).unwrap_or_default();
-        if k == EXTRA_AFTER_MERGE && text.trim().is_empty() {
-            confirm(
-                "KoopaGit",
-                "There are no changes after the merge.",
-                &["OK"],
-                |_| {},
-            );
-            return;
-        }
-        show_patch_text(&e.id, &text);
+        show_combined_diff(&self.workdir, &e.id, k);
     }
 
     /// "Revert change(s) by this/these commit(s)": `git revert --no-edit
@@ -701,6 +684,30 @@ impl LogActions {
             this.git_job("Delete", commands, vec![]);
         });
     }
+}
+
+/// "Unified diff with" a merge's All Parents / Only Merged Files / extra
+/// changes after the merge (`k` is `ALL_PARENTS`, `ONLY_MERGED` or
+/// `EXTRA_AFTER_MERGE`).
+pub fn show_combined_diff(workdir: &Path, id: &str, k: u32) {
+    let args: Vec<&str> = match k {
+        ALL_PARENTS => vec!["diff-tree", "-p", "-m", "--no-commit-id", "-r"],
+        ONLY_MERGED => vec!["diff-tree", "-p", "--cc", "--no-commit-id"],
+        _ => vec!["diff-tree", "-p", "--cc", "--no-commit-id"],
+    };
+    let mut full: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+    full.push(id.to_owned());
+    let text = Git::new(workdir).run(full).unwrap_or_default();
+    if k == EXTRA_AFTER_MERGE && text.trim().is_empty() {
+        confirm(
+            "KoopaGit",
+            "There are no changes after the merge.",
+            &["OK"],
+            |_| {},
+        );
+        return;
+    }
+    show_patch_text(id, &text);
 }
 
 /// Shows a patch in the unified-diff viewer (`koopagit-merge /diff:<file>`),

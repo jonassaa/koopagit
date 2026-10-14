@@ -2,7 +2,7 @@
 //! "Stash List" opens it with `/ref:refs/stash`.
 
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use koopagit_core::Repo;
@@ -12,6 +12,7 @@ use koopagit_core::history::ReflogEntry;
 use koopagit_core::launcher::{CloseOnEnd, Invocation};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
+use crate::log_menu::{ALL_PARENTS, EXTRA_AFTER_MERGE, ONLY_MERGED, parent_label};
 use crate::menus::ActionId;
 use crate::menus::reflog::{self as menu, ClipRow, ReflogAction as A, ReflogMenuInput};
 use crate::progress::{PostAction, ProgressJob};
@@ -64,7 +65,8 @@ pub fn delete_args(selector: &str) -> Vec<String> {
 enum Pending {
     None,
     Delete(Vec<usize>),
-    Revert(Vec<usize>),
+    /// Rows and the parent (1-based, 0 = first) to revert merges against.
+    Revert(Vec<usize>, u32),
     ClearStash,
 }
 
@@ -310,6 +312,10 @@ impl Actions {
             contiguous: ListSel::contiguous(&rows),
             first_short: short(first),
             last_short: short(last),
+            parent_labels: match (rows.len(), first) {
+                (1, Some(e)) => parent_labels(&self.workdir, &e.id),
+                _ => Vec::new(),
+            },
         })
     }
 
@@ -335,7 +341,10 @@ impl Actions {
     }
 
     fn run(&self, row: usize, id: i32) {
-        let Some(action) = A::from_id(id) else { return };
+        // `k`: the parent (1-based) or a merge diff mode chosen in a submenu.
+        let Some((action, k)) = menu::decode(id) else {
+            return;
+        };
         // The menu acts on the rows that were selected when it opened.
         self.sel.right(row);
         let rows = self.sel.effective(row);
@@ -352,17 +361,20 @@ impl Actions {
                     .with("revision1", id)
                     .with("revision2", ""),
             ),
+            A::UnifiedDiff if matches!(k, ALL_PARENTS | ONLY_MERGED | EXTRA_AFTER_MERGE) => {
+                crate::logactions::show_combined_diff(&self.workdir, &id, k)
+            }
             A::UnifiedDiff => spawn_launcher(
                 &self
                     .launch("showcompare")
-                    .with("revision1", format!("{id}^"))
+                    .with("revision1", parent_rev(&id, k))
                     .with("revision2", id)
                     .with_switch("unified"),
             ),
             A::CompareWithPrevious => spawn_launcher(
                 &self
                     .launch("showcompare")
-                    .with("revision1", format!("{id}^"))
+                    .with("revision1", parent_rev(&id, k))
                     .with("revision2", id),
             ),
             A::ShowLog => spawn_launcher(
@@ -385,7 +397,7 @@ impl Actions {
             A::RebaseOnto => spawn_launcher(&self.launch("rebase").with("upstream", id)),
             A::Export => spawn_launcher(&self.launch("export").with("rev", id)),
             A::Revert => {
-                self.state.borrow_mut().pending = Pending::Revert(rows.clone());
+                self.state.borrow_mut().pending = Pending::Revert(rows.clone(), k);
                 let text = if rows.len() == 1 {
                     "Do you really want to revert the changes of the selected commit?".to_owned()
                 } else {
@@ -582,7 +594,7 @@ impl Actions {
                     .collect();
                 self.git_job("Delete", cmds, Vec::new());
             }
-            Pending::Revert(rows) => {
+            Pending::Revert(rows, parent) => {
                 let git = Git::new(&self.workdir);
                 let cmds = self
                     .entries(&rows)
@@ -594,7 +606,7 @@ impl Actions {
                             .unwrap_or(false);
                         let mut c = vec!["revert".into(), "--no-edit".into(), "--no-commit".into()];
                         if merge {
-                            c.extend(["-m".into(), "1".into()]);
+                            c.extend(["-m".into(), parent.max(1).to_string()]);
                         }
                         c.push(e.id.clone());
                         c
@@ -608,9 +620,67 @@ impl Actions {
     }
 }
 
+/// Parent `k` (1-based; 0 = the first) of `id` as a revision.
+fn parent_rev(id: &str, k: u32) -> String {
+    format!("{id}^{}", k.max(1))
+}
+
+/// `Parent %d: "<subject>" (<hash>)` labels of `id`'s parents, for the
+/// merge submenus (LLB:1706).
+fn parent_labels(workdir: &Path, id: &str) -> Vec<String> {
+    let git = Git::new(workdir);
+    let parents: Vec<String> = git
+        .run(["rev-list", "--parents", "-n", "1", id])
+        .map(|o| o.split_whitespace().skip(1).map(str::to_owned).collect())
+        .unwrap_or_default();
+    parents
+        .iter()
+        .enumerate()
+        .map(|(k, p)| {
+            let subject = git
+                .run(["show", "-s", "--format=%s", p])
+                .unwrap_or_default();
+            parent_label(k + 1, subject.trim(), p)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merge_parents() {
+        let dir = tempfile::tempdir().unwrap();
+        let git = Git::new(dir.path());
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &["config", "user.name", "T"],
+            &["config", "user.email", "t@example.com"],
+            &["commit", "-q", "--allow-empty", "-m", "base"],
+            &["checkout", "-q", "-b", "side"],
+            &["commit", "-q", "--allow-empty", "-m", "side work"],
+            &["checkout", "-q", "main"],
+            &["commit", "-q", "--allow-empty", "-m", "main work"],
+            &["merge", "-q", "--no-ff", "-m", "merge", "side"],
+        ] {
+            git.run(args.iter().copied()).unwrap();
+        }
+        let head = git.run(["rev-parse", "HEAD"]).unwrap();
+        let labels = parent_labels(dir.path(), head.trim());
+        assert_eq!(labels.len(), 2);
+        assert!(
+            labels[0].starts_with("Parent 1: \"main work\""),
+            "{labels:?}"
+        );
+        assert!(
+            labels[1].starts_with("Parent 2: \"side work\""),
+            "{labels:?}"
+        );
+        assert_eq!(parent_labels(dir.path(), "HEAD~1").len(), 1);
+        assert_eq!(parent_rev("abc", 0), "abc^1");
+        assert_eq!(parent_rev("abc", 2), "abc^2");
+    }
 
     #[test]
     fn selectors() {
