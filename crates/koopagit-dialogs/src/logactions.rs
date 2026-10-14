@@ -358,7 +358,10 @@ impl LogActions {
             }
             LogAction::SvnDCommit => spawn_launcher(&self.launch("svndcommit")),
             LogAction::Delete => self.delete_refs(e, k),
-            LogAction::ShowBranches => self.show_branches(e),
+            // `CCommitIsOnRefsDlg` (GitLogListAction.cpp:1023).
+            LogAction::ShowBranches => {
+                spawn_launcher(&self.launch("commitisonrefs").with("rev", e.id.clone()))
+            }
             LogAction::FindEntry => (self.find)(),
             LogAction::CopyFull
             | LogAction::CopyNoPaths
@@ -702,32 +705,6 @@ impl LogActions {
                 .collect();
             this.git_job("Delete", commands, vec![]);
         });
-    }
-
-    fn show_branches(&self, e: &LogEntry) {
-        let out = self
-            .git()
-            .run([
-                "for-each-ref",
-                "--contains",
-                &e.id,
-                "--format=%(refname)",
-                "refs/heads",
-                "refs/remotes",
-                "refs/tags",
-            ])
-            .unwrap_or_default();
-        let refs: Vec<&str> = out.lines().filter(|l| !l.ends_with("/HEAD")).collect();
-        let text = if refs.is_empty() {
-            format!("Commit {} is not on any ref.", &e.id[..e.id.len().min(8)])
-        } else {
-            format!(
-                "Commit {} is on:\n{}",
-                &e.id[..e.id.len().min(8)],
-                refs.join("\n")
-            )
-        };
-        confirm("Commit is on refs", &text, &["OK"], |_| {});
     }
 }
 
