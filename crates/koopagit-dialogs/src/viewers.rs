@@ -68,6 +68,58 @@ fn diff_options(d: &DiffViewer) -> DiffOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Save prompt on exit
+
+/// IDS_WARNMODIFIEDLOOSECHANGES.
+pub const SAVE_PROMPT: &str = "There are unsaved modifications!\nDo you want to save your changes?";
+
+/// An answer to the exit question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveChoice {
+    SaveLeft,
+    SaveRight,
+    SaveAll,
+    /// The right (two-way) or merged (three-way) file.
+    Save,
+    Quit,
+    Cancel,
+}
+
+/// The exit question's answers (`CMainFrame::CheckForSave`, MainFrm.cpp:2613,
+/// with IDS_ASKFORSAVE_* captions): both sides of a diff modified offer each
+/// side and "Save all"; otherwise one save entry. Empty when nothing changed.
+pub fn save_prompt(left_modified: bool, right_modified: bool) -> Vec<(&'static str, SaveChoice)> {
+    use SaveChoice as C;
+    let mut out = match (left_modified, right_modified) {
+        (false, false) => return Vec::new(),
+        (true, true) => vec![
+            ("Save Left File", C::SaveLeft),
+            ("Save Right File", C::SaveRight),
+            ("Save all", C::SaveAll),
+        ],
+        (true, false) => vec![("Save Left File", C::SaveLeft)],
+        (false, true) => vec![("Save", C::Save)],
+    };
+    out.extend([("Quit", C::Quit), ("Cancel", C::Cancel)]);
+    out
+}
+
+/// The question in the conflict viewer's notice bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConflictAsk {
+    None,
+    /// "Mark the file as resolved?" after a save.
+    Resolve,
+    /// The exit question.
+    Exit,
+}
+
+fn notice_buttons(choices: &[(&'static str, SaveChoice)]) -> ModelRc<SharedString> {
+    let labels: Vec<SharedString> = choices.iter().map(|(l, _)| (*l).into()).collect();
+    ModelRc::new(VecModel::from(labels))
+}
+
+// ---------------------------------------------------------------------------
 // Two-way diff
 
 /// Builds the rows of the side-by-side view.
@@ -263,29 +315,24 @@ pub fn run_diff(
             }
         });
     }
-    {
-        let weak = dlg.as_weak();
-        dlg.on_close_viewer(move || {
-            if let Some(d) = weak.upgrade() {
-                let _ = d.hide();
-            }
-        });
-    }
-    {
+    // Saves the modified sides among `left` / `right`; `false` if a write failed.
+    let save: Rc<dyn Fn(bool, bool) -> bool> = {
         let doc = doc.clone();
         let weak = dlg.as_weak();
         let (left, right) = (left.to_owned(), right.to_owned());
-        dlg.on_save(move || {
-            let Some(d) = weak.upgrade() else { return };
+        Rc::new(move |save_left, save_right| {
+            let Some(d) = weak.upgrade() else {
+                return false;
+            };
             let mut doc = doc.borrow_mut();
             let mut errors = Vec::new();
-            if doc.right_modified {
+            if save_right && doc.right_modified {
                 match std::fs::write(&right, doc.right_text(right_eol)) {
                     Ok(()) => doc.right_modified = false,
                     Err(e) => errors.push(format!("{}: {e}", right.display())),
                 }
             }
-            if doc.left_modified {
+            if save_left && doc.left_modified {
                 match std::fs::write(&left, doc.left_text(left_eol)) {
                     Ok(()) => doc.left_modified = false,
                     Err(e) => errors.push(format!("{}: {e}", left.display())),
@@ -300,6 +347,69 @@ pub fn run_diff(
                 }
                 .into(),
             );
+            errors.is_empty()
+        })
+    };
+    {
+        let save = save.clone();
+        dlg.on_save(move || {
+            save(true, true);
+        });
+    }
+    // Exit (keys, Close, the window's close button): ask first when there are
+    // unsaved modifications (`CMainFrame::OnClose` → `CheckForSave`).
+    let prompt: Rc<RefCell<Vec<(&'static str, SaveChoice)>>> = Rc::default();
+    let request_close: Rc<dyn Fn() -> bool> = {
+        let doc = doc.clone();
+        let weak = dlg.as_weak();
+        let prompt = prompt.clone();
+        Rc::new(move || {
+            let Some(d) = weak.upgrade() else {
+                return true;
+            };
+            let choices = {
+                let doc = doc.borrow();
+                save_prompt(doc.left_modified, doc.right_modified)
+            };
+            if choices.is_empty() {
+                let _ = d.hide();
+                return true;
+            }
+            d.set_notice_text(SAVE_PROMPT.into());
+            d.set_notice_buttons(notice_buttons(&choices));
+            *prompt.borrow_mut() = choices;
+            false
+        })
+    };
+    {
+        let request_close = request_close.clone();
+        dlg.on_close_viewer(move || {
+            request_close();
+        });
+    }
+    dlg.window().on_close_requested(move || {
+        if request_close() {
+            slint::CloseRequestResponse::HideWindow
+        } else {
+            slint::CloseRequestResponse::KeepWindowShown
+        }
+    });
+    {
+        let weak = dlg.as_weak();
+        dlg.on_notice_clicked(move |i| {
+            let Some(d) = weak.upgrade() else { return };
+            d.set_notice_text(SharedString::new());
+            let choice = prompt.borrow().get(i as usize).map(|(_, c)| *c);
+            let close = match choice {
+                Some(SaveChoice::SaveLeft) => save(true, false),
+                Some(SaveChoice::SaveRight | SaveChoice::Save) => save(false, true),
+                Some(SaveChoice::SaveAll) => save(true, true),
+                Some(SaveChoice::Quit) => true,
+                Some(SaveChoice::Cancel) | None => false,
+            };
+            if close {
+                let _ = d.hide();
+            }
         });
     }
     let jump = {
@@ -644,12 +754,18 @@ pub fn run_conflict(args: ConflictArgs) -> DialogResult<i32> {
         });
     }
     let saved = Rc::new(std::cell::Cell::new(false));
+    // What the notice bar asks; `closing`: Save was chosen on exit, so the
+    // window closes once the resolve question is answered.
+    let ask = Rc::new(std::cell::Cell::new(ConflictAsk::None));
+    let closing = Rc::new(std::cell::Cell::new(false));
     {
         let weak = dlg.as_weak();
         let segments = segments.clone();
         let choices = choices.clone();
         let merged = args.merged.clone();
         let saved = saved.clone();
+        let ask = ask.clone();
+        let closing = closing.clone();
         dlg.on_save(move || {
             let Some(d) = weak.upgrade() else { return };
             let Some(text) = conflict::render(&segments, &choices.borrow()) else {
@@ -671,8 +787,11 @@ pub fn run_conflict(args: ConflictArgs) -> DialogResult<i32> {
                         SharedString::from("Mark as resolved"),
                         SharedString::from("Not now"),
                     ])));
+                    ask.set(ConflictAsk::Resolve);
                 }
                 Err(e) => {
+                    closing.set(false);
+                    ask.set(ConflictAsk::None);
                     d.set_notice_error(true);
                     d.set_notice_text(format!("Saving failed: {e}").into());
                     d.set_notice_buttons(ModelRc::default());
@@ -680,33 +799,85 @@ pub fn run_conflict(args: ConflictArgs) -> DialogResult<i32> {
             }
         });
     }
+    // Exit: with unsaved choices ask Save / Quit / Cancel (`CheckForSave`).
+    let exit_choices = save_prompt(false, true);
+    let request_close: Rc<dyn Fn() -> bool> = {
+        let weak = dlg.as_weak();
+        let ask = ask.clone();
+        let exit_choices = exit_choices.clone();
+        Rc::new(move || {
+            let Some(d) = weak.upgrade() else {
+                return true;
+            };
+            if !d.get_modified() {
+                let _ = d.hide();
+                return true;
+            }
+            ask.set(ConflictAsk::Exit);
+            d.set_notice_error(false);
+            d.set_notice_text(SAVE_PROMPT.into());
+            d.set_notice_buttons(notice_buttons(&exit_choices));
+            false
+        })
+    };
     {
         let weak = dlg.as_weak();
         let merged = args.merged.clone();
         dlg.on_notice_clicked(move |i| {
             let Some(d) = weak.upgrade() else { return };
-            if i == 0 {
-                spawn_launcher(
-                    &Invocation::new("resolve")
-                        .with_paths([merged.clone()])
-                        .with("closeonend", "1")
-                        .with_switch("noquestion")
-                        .with_switch("silent"),
-                );
-                let _ = d.hide();
-            } else {
-                d.set_notice_text(SharedString::new());
+            d.set_notice_text(SharedString::new());
+            match ask.replace(ConflictAsk::None) {
+                ConflictAsk::Resolve if i == 0 => {
+                    spawn_launcher(
+                        &Invocation::new("resolve")
+                            .with_paths([merged.clone()])
+                            .with("closeonend", "1")
+                            .with_switch("noquestion")
+                            .with_switch("silent"),
+                    );
+                    let _ = d.hide();
+                }
+                ConflictAsk::Resolve => {
+                    if closing.get() {
+                        let _ = d.hide();
+                    }
+                }
+                ConflictAsk::Exit => match exit_choices.get(i as usize).map(|(_, c)| *c) {
+                    Some(SaveChoice::Save) if !d.get_can_save() => {
+                        // IDS_ERR_MAINFRAME_FILEHASCONFLICTS, without "save anyway".
+                        d.set_notice_error(true);
+                        d.set_notice_buttons(ModelRc::default());
+                        d.set_notice_text(
+                            "There are still unresolved conflicts!\nYou should resolve those conflicts first before saving."
+                                .into(),
+                        );
+                    }
+                    Some(SaveChoice::Save) => {
+                        closing.set(true);
+                        d.invoke_save();
+                    }
+                    Some(SaveChoice::Quit) => {
+                        let _ = d.hide();
+                    }
+                    _ => {}
+                },
+                ConflictAsk::None => {}
             }
         });
     }
     {
-        let weak = dlg.as_weak();
+        let request_close = request_close.clone();
         dlg.on_close_viewer(move || {
-            if let Some(d) = weak.upgrade() {
-                let _ = d.hide();
-            }
+            request_close();
         });
     }
+    dlg.window().on_close_requested(move || {
+        if request_close() {
+            slint::CloseRequestResponse::HideWindow
+        } else {
+            slint::CloseRequestResponse::KeepWindowShown
+        }
+    });
     if count > 0 {
         go(0);
     }
@@ -1002,6 +1173,28 @@ pub fn run_blame(repo: &Repo, rel: &str, rev: Option<&str>, line: Option<usize>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exit_question_choices() {
+        use SaveChoice as C;
+        let labels =
+            |l: bool, r: bool| -> Vec<&str> { save_prompt(l, r).iter().map(|(t, _)| *t).collect() };
+        assert!(save_prompt(false, false).is_empty());
+        assert_eq!(
+            labels(true, true),
+            [
+                "Save Left File",
+                "Save Right File",
+                "Save all",
+                "Quit",
+                "Cancel"
+            ]
+        );
+        assert_eq!(labels(true, false), ["Save Left File", "Quit", "Cancel"]);
+        assert_eq!(labels(false, true), ["Save", "Quit", "Cancel"]);
+        assert_eq!(save_prompt(false, true)[0].1, C::Save);
+        assert_eq!(save_prompt(true, true)[2].1, C::SaveAll);
+    }
 
     #[test]
     fn diff_row_texts() {
