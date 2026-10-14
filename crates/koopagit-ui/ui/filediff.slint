@@ -2,7 +2,7 @@
 import { Button, LineEdit, GroupBox, VerticalBox, HorizontalBox, TextEdit } from "std-widgets.slint";
 import { FileList, FileRow, LinkLabel } from "common.slint";
 import { DialogKeys } from "keys.slint";
-import { EditCombo } from "remote_widgets.slint";
+import { EditCombo, KeyMenu } from "remote_widgets.slint";
 import { KoopaWindow } from "window.slint";
 
 export component FileDiffDialog inherits KoopaWindow {
@@ -14,6 +14,10 @@ export component FileDiffDialog inherits KoopaWindow {
     in property <string> rev1-group: "Version 1 (Base)";
     in property <string> rev2-group: "Version 2";
     in property <[string]> refs;
+    // CMenuButton entries (IDS_REFBROWSE, IDS_LOG, IDS_REFLOG) and the current one.
+    out property <[string]> rev-entries: ["Reference Browser", "Log", "RefLog"];
+    in-out property <int> rev1-choice: 0;
+    in-out property <int> rev2-choice: 0;
     in-out property <string> filter-text;
     in property <[FileRow]> rows;
     in-out property <int> current-row: -1;
@@ -29,7 +33,9 @@ export component FileDiffDialog inherits KoopaWindow {
     in-out property <bool> patch-visible;
     in property <string> patch-text;
     callback rev-entered();
-    callback set-head(int);
+    // The "Reference Browser" / "Log" / "RefLog" menu button of version 1 or 2
+    // (`CFileDiffDlg::ClickRevButton`) runs its current entry.
+    callback rev-button(int);
     callback swap();
     callback show-log();
     callback filter-edited();
@@ -88,7 +94,11 @@ export component FileDiffDialog inherits KoopaWindow {
                             items: root.refs;
                             selected => { root.rev-entered(); }
                         }
-                        Button { text: "HEAD"; width: 80px; clicked => { root.set-head(1); } }
+                        HorizontalLayout {
+                            spacing: 1px;
+                            Button { text: root.rev-entries[root.rev1-choice]; clicked => { root.rev-button(1); } }
+                            rev1-arrow := Button { text: "▾"; width: 28px; clicked => { rev1-menu.show(); } }
+                        }
                     }
                     Text { text: root.rev1-info; overflow: elide; color: #888; }
                 }
@@ -104,7 +114,11 @@ export component FileDiffDialog inherits KoopaWindow {
                             items: root.refs;
                             selected => { root.rev-entered(); }
                         }
-                        Button { text: "HEAD"; width: 80px; clicked => { root.set-head(2); } }
+                        HorizontalLayout {
+                            spacing: 1px;
+                            Button { text: root.rev-entries[root.rev2-choice]; clicked => { root.rev-button(2); } }
+                            rev2-arrow := Button { text: "▾"; width: 28px; clicked => { rev2-menu.show(); } }
+                        }
                     }
                     Text { text: root.rev2-info; overflow: elide; color: #888; }
                 }
@@ -169,6 +183,24 @@ export component FileDiffDialog inherits KoopaWindow {
             }
         }
       }
+    }
+
+    // Picking a drop-down entry makes it current and runs it (CMFCMenuButton).
+    rev1-menu := KeyMenu {
+        x: rev1-arrow.absolute-position.x - 212px;
+        y: rev1-arrow.absolute-position.y + rev1-arrow.height;
+        item-width: 240px;
+        entries: root.rev-entries;
+        keys: ["", "", ""];
+        picked(i) => { root.rev1-choice = i; root.rev-button(1); }
+    }
+    rev2-menu := KeyMenu {
+        x: rev2-arrow.absolute-position.x - 212px;
+        y: rev2-arrow.absolute-position.y + rev2-arrow.height;
+        item-width: 240px;
+        entries: root.rev-entries;
+        keys: ["", "", ""];
+        picked(i) => { root.rev2-choice = i; root.rev-button(2); }
     }
 
     options-menu := ContextMenuArea {
