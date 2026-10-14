@@ -9,7 +9,9 @@ use koopagit_core::remote::{ALL_REMOTES, remote_choices};
 use slint::ComponentHandle;
 
 use crate::progress::{PostAction, ProgressJob, When};
-use crate::remote_util::{merged, remote_branches_of, save, strings, valid_branch_name, wd_key};
+use crate::remote_util::{
+    merged, pull_url_from_clipboard, remote_branches_of, save, strings, valid_branch_name, wd_key,
+};
 use crate::{Context, DialogResult, PushDialog, spawn_launcher};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -111,10 +113,33 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         branch_history,
         remote_branches_of(repo, &selected_remote),
     )));
-    dlg.set_url_items(strings(
-        &ctx.settings
-            .history(&wd_key(r"History\PushURLS", repo), "url"),
-    ));
+    let url_history = ctx
+        .settings
+        .history(&wd_key(r"History\PushURLS", repo), "url");
+    dlg.set_url_items(strings(&url_history));
+    {
+        // PushDlg.cpp:371: a `git pull`/`git fetch` line on the clipboard
+        // fills the URL and remote branch, else the history.
+        let weak = dlg.as_weak();
+        dlg.on_url_chosen(move || {
+            let Some(d) = weak.upgrade() else { return };
+            let link = crate::clipboard::text()
+                .and_then(|t| pull_url_from_clipboard(&t, ["git pull", "git fetch"]));
+            match link {
+                Some((url, branch)) => {
+                    d.set_url(url.into());
+                    if let Some(b) = branch {
+                        d.set_remote_branch(b.into());
+                    }
+                }
+                None => {
+                    if let Some(first) = url_history.first() {
+                        d.set_url(first.into());
+                    }
+                }
+            }
+        });
+    }
     if let Some(b) = &current {
         dlg.set_set_upstream(repo.tracking_branch(b).is_none());
     }

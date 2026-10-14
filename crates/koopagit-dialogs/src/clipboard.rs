@@ -52,3 +52,10 @@ pub fn copy(text: &str) -> bool {
     }
     false
 }
+
+/// The clipboard's text, if any.
+pub fn text() -> Option<String> {
+    arboard::Clipboard::new()
+        .and_then(|mut c| c.get_text())
+        .ok()
+}

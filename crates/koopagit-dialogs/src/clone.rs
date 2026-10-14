@@ -13,7 +13,7 @@ use koopagit_core::settings::Settings;
 use slint::ComponentHandle;
 
 use crate::progress::{PostAction, ProgressJob};
-use crate::remote_util::{save, strings};
+use crate::remote_util::{clone_url_from_clipboard, save, strings};
 use crate::{CloneDialog, DialogResult};
 
 /// Where the clone process runs: the nearest existing ancestor of the target.
@@ -59,9 +59,11 @@ pub fn run(cwd: &Path, inv: &Invocation, settings: &Settings) -> DialogResult<i3
     let dlg = CloneDialog::new()?;
     let history = settings.history(r"History\repoURLS", "url");
     dlg.set_url_items(strings(&history));
+    // CloneDlg.cpp:163: /url, else a link on the clipboard, else the history.
     let url = inv
         .get("url")
         .map(str::to_owned)
+        .or_else(|| crate::clipboard::text().and_then(|t| clone_url_from_clipboard(&t)))
         .or_else(|| history.first().cloned())
         .unwrap_or_default();
     let exact = inv.has("exactpath");

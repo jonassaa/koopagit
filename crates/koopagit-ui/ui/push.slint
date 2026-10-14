@@ -40,6 +40,8 @@ export component PushDialog inherits KoopaWindow {
     in property <bool> notice-error;
     callback notice-clicked(int);
     callback local-changed();
+    // "Arbitrary URL" was chosen: prefill from the clipboard (OnBnClickedRd).
+    callback url-chosen();
     callback manage();
     // F5: reload the branch and remote lists.
     callback refresh();
@@ -61,7 +63,7 @@ export component PushDialog inherits KoopaWindow {
             if (k == "r") { if (remote-branch-combo.enabled) { remote-branch-combo.focus(); } return true; }
             if (k == "m") { root.use-url = false; remote-radio.take-focus(); return true; }
             if (k == "g") { root.manage(); return true; }
-            if (k == "u") { root.use-url = true; url-radio.take-focus(); return true; }
+            if (k == "u") { root.use-url = true; root.url-chosen(); url-radio.take-focus(); return true; }
             if (k == "w") {
                 if (lease-check.enabled) { root.force-with-lease = !root.force-with-lease; lease-check.focus(); }
                 return true;
@@ -140,7 +142,7 @@ export component PushDialog inherits KoopaWindow {
                             text: "Arbitrary URL:";
                             width: 110px;
                             checked: root.use-url;
-                            clicked => { root.use-url = true; }
+                            clicked => { root.use-url = true; root.url-chosen(); }
                         }
                         EditCombo {
                             accepted => { root.ok(); }

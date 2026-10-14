@@ -13,7 +13,8 @@ use slint::ComponentHandle;
 
 use crate::progress::{PostAction, ProgressJob, When};
 use crate::remote_util::{
-    merged, prune_default_label, remote_branches_of, save, strings, tags_default_label, tri, wd_key,
+    merged, prune_default_label, pull_url_from_clipboard, remote_branches_of, save, strings,
+    tags_default_label, tri, wd_key,
 };
 use crate::{Context, DialogResult, PullFetchDialog, msgbox, spawn_launcher};
 
@@ -90,7 +91,8 @@ fn run(ctx: &mut Context, is_fetch: bool) -> DialogResult<i32> {
         })
         .unwrap_or(0);
     dlg.set_remote_index(index.min(choices.len().saturating_sub(1)) as i32);
-    dlg.set_url_items(strings(&ctx.settings.history(r"History\PullURLS", "url")));
+    let url_history = ctx.settings.history(r"History\PullURLS", "url");
+    dlg.set_url_items(strings(&url_history));
 
     let branch_history = ctx.settings.history(r"History\PullRemoteBranch", "br");
     let remote_branch = tracked
@@ -139,10 +141,38 @@ fn run(ctx: &mut Context, is_fetch: bool) -> DialogResult<i32> {
                 .unwrap_or_default();
             d.set_tags_default(tags_default_label(&repo, &remote).into());
             d.set_prune_default(prune_default_label(&repo, &remote).into());
+            // A fetch from an arbitrary URL always names its branch.
+            d.set_remote_branch_enabled(d.get_use_url() || !(is_fetch && named_fetch_all));
         }
     };
     update_defaults();
     dlg.on_remote_changed(update_defaults);
+    {
+        // PullFetchDlg.cpp:391: a `git pull`/`git fetch` line on the
+        // clipboard fills the URL and remote branch, else the history.
+        let weak = dlg.as_weak();
+        dlg.on_url_chosen(move || {
+            let Some(d) = weak.upgrade() else { return };
+            let commands = if is_fetch {
+                ["git fetch", "git pull"]
+            } else {
+                ["git pull", "git fetch"]
+            };
+            match crate::clipboard::text().and_then(|t| pull_url_from_clipboard(&t, commands)) {
+                Some((url, branch)) => {
+                    d.set_url(url.into());
+                    if let Some(b) = branch {
+                        d.set_remote_branch(b.into());
+                    }
+                }
+                None => {
+                    if let Some(first) = url_history.first() {
+                        d.set_url(first.into());
+                    }
+                }
+            }
+        });
+    }
 
     {
         let workdir = repo.workdir().to_owned();

@@ -29,13 +29,6 @@ pub fn is_wc(e: &LogEntry) -> bool {
     e.id.is_empty()
 }
 
-/// The clipboard's text, for pasting a commit hash into a log list.
-pub fn clipboard_text() -> Option<String> {
-    arboard::Clipboard::new()
-        .and_then(|mut c| c.get_text())
-        .ok()
-}
-
 /// Parent `k` (1-based) of `e`, or the empty tree for a root commit.
 pub fn parent(e: &LogEntry, k: usize) -> String {
     e.parents
