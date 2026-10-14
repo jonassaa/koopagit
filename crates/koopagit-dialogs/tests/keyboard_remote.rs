@@ -379,8 +379,12 @@ fn progress_escape_waits_for_git_then_closes() {
 // -------------------------------------------------------------- MessageBox
 
 fn message_box(buttons: &[&str]) -> (MessageBox, Rc<Cell<i32>>) {
+    message_box_default(buttons, 0)
+}
+
+fn message_box_default(buttons: &[&str], default: usize) -> (MessageBox, Rc<Cell<i32>>) {
     let dlg = MessageBox::new().unwrap();
-    msgbox::configure(&dlg, "KoopaGit", "Do it?", buttons);
+    msgbox::configure(&dlg, "KoopaGit", "Do it?", buttons, default);
     let clicked = Rc::new(Cell::new(-1));
     let c = clicked.clone();
     dlg.on_clicked(move |i| c.set(i));
@@ -413,6 +417,21 @@ fn message_box_enter_escape_and_access_keys() {
     dlg.show().unwrap();
     press(dlg.window(), K::Escape);
     assert_eq!(clicked.get(), -1);
+}
+
+#[test]
+fn message_box_default_button() {
+    init();
+    // MB_DEFBUTTON2: Enter answers "No".
+    let (dlg, clicked) = message_box_default(&["Yes", "No"], 1);
+    dlg.show().unwrap();
+    assert_eq!(dlg.get_default_button(), 1);
+    press(dlg.window(), K::Return);
+    assert_eq!(clicked.get(), 1);
+
+    // Out of range falls back to the last button.
+    let (dlg, _) = message_box_default(&["OK"], 3);
+    assert_eq!(dlg.get_default_button(), 0);
 }
 
 #[test]

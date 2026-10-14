@@ -13,13 +13,13 @@ use koopagit_core::git_cli::Git;
 use koopagit_core::history::WORKING_TREE_REV;
 use koopagit_core::launcher::{CloseOnEnd, Invocation};
 use koopagit_core::log::LogEntry;
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::ComponentHandle;
 
 use crate::log_menu::{
     ALL_PARENTS, CopyCommit, DELETE_ALL, EXTRA_AFTER_MERGE, LogAction, ONLY_MERGED, copy_text,
 };
 use crate::progress::{PostAction, ProgressJob};
-use crate::{MessageBox, NotesDialog, keep_alive, spawn_launcher};
+use crate::{NotesDialog, keep_alive, spawn_launcher};
 
 /// The empty tree, used as "previous revision" of a root commit.
 pub const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -489,8 +489,9 @@ impl LogActions {
             )
         };
         let this = self.clone();
-        confirm("KoopaGit", &text, &["No", "Yes"], move |choice| {
-            if choice != 1 {
+        // GitLogListAction.cpp:55: MB_YESNO | MB_DEFBUTTON2.
+        confirm_default("KoopaGit", &text, &["Yes", "No"], 1, move |choice| {
+            if choice != 0 {
                 return;
             }
             let commands = commits
@@ -695,7 +696,8 @@ impl LogActions {
             )
         };
         let this = self.clone();
-        confirm("KoopaGit", &text, &["Delete", "Abort"], move |c| {
+        // `CAppUtils::DeleteRef` (AppUtils.cpp:3860): "Abort" is the default.
+        confirm_default("KoopaGit", &text, &["Delete", "Abort"], 1, move |c| {
             if c != 0 {
                 return;
             }
@@ -778,23 +780,22 @@ fn reflog_selector(e: &LogEntry) -> Option<String> {
 
 /// A non-blocking message box; `on_choice` gets the clicked button index.
 pub fn confirm(title: &str, text: &str, buttons: &[&str], on_choice: impl FnOnce(usize) + 'static) {
-    let Ok(dlg) = MessageBox::new() else { return };
-    dlg.set_dialog_title(title.into());
-    dlg.set_text(text.into());
-    let labels: Vec<SharedString> = buttons.iter().map(|b| (*b).into()).collect();
-    dlg.set_buttons(ModelRc::new(VecModel::from(labels)));
-    let cb = std::cell::RefCell::new(Some(on_choice));
-    let weak = dlg.as_weak();
-    dlg.on_clicked(move |i| {
-        if let Some(d) = weak.upgrade() {
-            let _ = d.hide();
-        }
-        if let Some(f) = cb.borrow_mut().take() {
-            f(i as usize);
+    confirm_default(title, text, buttons, 0, on_choice);
+}
+
+/// [`confirm`] with `default` (0-based) as the Enter button.
+pub fn confirm_default(
+    title: &str,
+    text: &str,
+    buttons: &[&str],
+    default: usize,
+    on_choice: impl FnOnce(usize) + 'static,
+) {
+    crate::msgbox::ask_async_default(title, text, buttons, default, move |c| {
+        if let Some(c) = c {
+            on_choice(c);
         }
     });
-    let _ = dlg.show();
-    keep_alive(dlg);
 }
 
 #[cfg(test)]

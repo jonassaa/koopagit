@@ -589,8 +589,20 @@ impl FileListMenu {
 
     /// Asks a yes/no question without blocking; runs `then` on "Yes".
     fn confirm(&self, text: &str, then: impl FnOnce(&FileListMenu) + 'static) {
+        self.confirm_with(text, &["Yes", "No"], 0, then);
+    }
+
+    /// Like [`Self::confirm`] with other buttons and Enter on `default`;
+    /// `then` runs for the first button.
+    fn confirm_with(
+        &self,
+        text: &str,
+        buttons: &[&str],
+        default: usize,
+        then: impl FnOnce(&FileListMenu) + 'static,
+    ) {
         let me = self.me.borrow().clone();
-        msgbox::ask_async("KoopaGit", text, &["Yes", "No"], move |a| {
+        msgbox::ask_async_default("KoopaGit", text, buttons, default, move |a| {
             if a == Some(0) {
                 if let Some(m) = me.upgrade() {
                     then(&m);
@@ -775,7 +787,8 @@ impl FileListMenu {
                         "Do you really want to remove the \"skip-worktree\" and \"assume-unchanged\" flags from the selected files?"
                     }
                 };
-                self.confirm(text, move |m| {
+                // GitStatusListCtrl.cpp:2865: MB_DEFBUTTON2.
+                self.confirm_with(text, &["Yes", "No"], 1, move |m| {
                     let cmds = match action {
                         A::SkipWorktree => vec![listops::set_index_flag(
                             IndexFlag::SkipWorktree,
@@ -817,8 +830,11 @@ impl FileListMenu {
             }
             A::RestorePath => {
                 let rels = rels.clone();
-                self.confirm(
-                    "Do you really want to restore the copy? All changes made since \"Restore after commit\" was selected will be lost.",
+                // GitStatusListCtrl.cpp:2196 (IDS_STATUSLIST_RESTOREPATH).
+                self.confirm_with(
+                    "Do you really want to restore the copy? You will lose all changes that you have done after creating the copy.",
+                    &["&Restore", "Abort"],
+                    1,
                     move |m| {
                         for rel in &rels {
                             let backup = m.backups.borrow_mut().remove(rel);

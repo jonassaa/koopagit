@@ -397,19 +397,23 @@ fn rebase_after_fetch(repo: &Repo, upstream: &str) {
             .is_ok_and(|o| o.success())
     };
     if is_ancestor(upstream, "HEAD") {
-        let ask = msgbox::ask(
+        // AppUtils.cpp:2676: MB_DEFBUTTON2.
+        let ask = msgbox::ask_default(
             "KoopaGit",
             "The current branch is up to date with the upstream branch.\nDo you want to rebase anyway?",
             &["Yes", "No"],
+            1,
         );
         if ask != Some(0) {
             return;
         }
     } else if is_ancestor("HEAD", upstream) {
-        match msgbox::ask(
+        // AppUtils.cpp:2685: "Rebase" is the default.
+        match msgbox::ask_default(
             "KoopaGit",
             &format!("The current branch can be fast-forwarded to \"{upstream}\"."),
             &["Merge", "Rebase", "Abort"],
+            1,
         ) {
             Some(0) => {
                 let _ = crate::progress::run(ProgressJob {
