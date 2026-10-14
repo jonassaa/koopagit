@@ -130,7 +130,7 @@ platform forces a change.
 | File Diff list | Columns `File` / `Action`, own context menu (spec-menus §1.7). | Same columns and menu (`menus/filediff.rs`). "Show changes as unified diff" with the working tree as version 1 shows `version 2..Working Tree`, i.e. the reverse direction. | `/command:showcompare /unified` only diffs from a revision to the working tree. |
 | Export post button | `Explore to` after a successful export. | Not offered. | Post buttons can only launch commands or run git. |
 | Format Patch pickers | `...` buttons open modal Browse References (Since, no tags) / Log (From, To) pickers. | Same pickers as separate processes (see "Ref and commit pickers"); the dialog stays usable meanwhile. | Slint cannot nest modal dialogs. |
-| Apply Patches list | Drag & drop of patch files; patch list context menu. | Add button (native file picker) only. | Not implemented yet. |
+| Apply Patches list | Drag & drop of patch files; multi-selection (Send Mail... mails all selected patches). | Add button (native file picker) only; the list selects one patch, so the menu acts on that one. | Not implemented yet. |
 | Import patch outside a repository | `ChooseRepository` folder dialog. | Current directory first, then a native folder picker. | Same flow, platform picker. |
 | Worktree lock reason | libgit2 lock without a reason. | `git worktree lock` (no reason prompt either). | Same behaviour via the CLI. |
 | Submodule Add | PuTTY key. | Not offered. | PuTTY is Windows-only. |

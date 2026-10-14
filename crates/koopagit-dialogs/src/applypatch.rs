@@ -7,9 +7,10 @@ use std::sync::{Arc, Mutex};
 
 use koopagit_core::extras::{self, AmControl, AmOptions};
 use koopagit_core::git_cli::Git;
+use koopagit_core::launcher::Invocation;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
-use crate::{ApplyPatchDialog, Context, DialogResult, PatchRow};
+use crate::{ApplyPatchDialog, Context, DialogResult, PatchRow, spawn_launcher};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RowState {
@@ -154,6 +155,56 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             }
             if let Some(d) = weak.upgrade() {
                 refresh(&d, &shared.lock().unwrap());
+            }
+        });
+    }
+    {
+        // CPatchListCtrl: View Patch / Review Patch with KoopaGitMerge
+        // (`StartExtPatch`) / Send Mail... (PatchListCtrl.cpp:85).
+        let path_of = {
+            let shared = shared.clone();
+            move |i: i32| {
+                shared
+                    .lock()
+                    .unwrap()
+                    .rows
+                    .get(usize::try_from(i).ok()?)
+                    .map(|r| r.path.clone())
+            }
+        };
+        let merge = |args: Vec<String>| {
+            let exe = crate::diffcmd::sibling_exe("koopagit-merge");
+            if let Err(e) = std::process::Command::new(exe).args(args).spawn() {
+                eprintln!("koopagit: {e}");
+            }
+        };
+        let diff_arg = |p: &PathBuf| format!("/diff:{}", p.to_string_lossy());
+        {
+            let path_of = path_of.clone();
+            dlg.on_view_patch(move |i| {
+                if let Some(p) = path_of(i) {
+                    merge(vec![diff_arg(&p)]);
+                }
+            });
+        }
+        {
+            let path_of = path_of.clone();
+            let workdir = workdir.clone();
+            dlg.on_review_patch(move |i| {
+                if let Some(p) = path_of(i) {
+                    merge(vec![
+                        diff_arg(&p),
+                        format!("/patchpath:{}", workdir.to_string_lossy()),
+                    ]);
+                }
+            });
+        }
+        let workdir = workdir.clone();
+        dlg.on_send_mail(move |i| {
+            if let Some(p) = path_of(i) {
+                // Send Mail mails the files among its paths; the working tree
+                // folder lets it find the repository for a patch kept outside.
+                spawn_launcher(&Invocation::new("sendmail").with_paths([p, workdir.clone()]));
             }
         });
     }
