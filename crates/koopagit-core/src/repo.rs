@@ -24,7 +24,19 @@ impl Repo {
     /// TortoiseGit's `GitAdminDir::HasAdminDir`.
     pub fn discover(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let start = if path.is_dir() {
+        Repo::discover_with(path, path.is_dir())
+    }
+
+    /// Like [`Repo::discover`], but treats `path` as a file even when it is a
+    /// folder, so the search starts at its parent. For a submodule folder this
+    /// finds the superproject (`CGit::SetCurrentDir(path, submodule = true)`,
+    /// Git.h:446, used for the launcher's `/submodule`).
+    pub fn discover_as_file(path: impl AsRef<Path>) -> Result<Self> {
+        Repo::discover_with(path.as_ref(), false)
+    }
+
+    fn discover_with(path: &Path, is_dir: bool) -> Result<Self> {
+        let start = if is_dir {
             path
         } else {
             path.parent().unwrap_or(path)
@@ -237,6 +249,19 @@ pub(crate) mod tests {
             repo.relative_path(dir.path().join("sub")).as_deref(),
             Some("sub")
         );
+    }
+
+    #[test]
+    fn discover_as_file_finds_the_superproject() {
+        let (dir, repo) = fixture();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        Git::new(&sub).run(["init", "-q"]).unwrap();
+        let inner = Repo::discover(&sub).unwrap();
+        assert_ne!(inner.workdir(), repo.workdir());
+        let outer = Repo::discover_as_file(&sub).unwrap();
+        assert_eq!(outer.workdir(), repo.workdir());
+        assert_eq!(outer.relative_path(&sub).as_deref(), Some("sub"));
     }
 
     #[test]

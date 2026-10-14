@@ -131,7 +131,15 @@ fn main() -> ExitCode {
     } else {
         paths.clone()
     };
-    let repo = if needs == Needs::WorkingTreeOrBare {
+    // `/submodule` treats the first path as a file, so a submodule folder
+    // opens its superproject (TortoiseProc.cpp:303).
+    let submodule_parent = probe
+        .first()
+        .filter(|_| invocation.has("submodule"))
+        .and_then(|p| Repo::discover_as_file(p).ok());
+    let repo = if submodule_parent.is_some() {
+        submodule_parent
+    } else if needs == Needs::WorkingTreeOrBare {
         probe
             .iter()
             .find_map(|p| Repo::discover_including_bare(p).ok())
