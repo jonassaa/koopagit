@@ -244,17 +244,41 @@ pub fn run(
         dlg.on_options_changed(move || reload());
     }
     {
-        let reload = reload.clone();
+        // `ClickRevButton` (FileDiffDlg.cpp:1033): Reference Browser, Log or
+        // RefLog picks the version, then the differences are re-read.
         let weak = dlg.as_weak();
-        dlg.on_set_head(move |which| {
-            if let Some(d) = weak.upgrade() {
-                if which == 1 {
-                    d.set_rev1_text("HEAD".into());
-                } else {
-                    d.set_rev2_text("HEAD".into());
+        let workdir = repo.workdir().to_owned();
+        dlg.on_rev_button(move |which| {
+            let Some(d) = weak.upgrade() else { return };
+            let (choice, current) = if which == 1 {
+                (d.get_rev1_choice(), d.get_rev1_text())
+            } else {
+                (d.get_rev2_choice(), d.get_rev2_text())
+            };
+            let base = |command: &str| Invocation::new(command).with_paths([workdir.clone()]);
+            let inv = match choice {
+                0 => base("refbrowse"),
+                1 => {
+                    let rev = parse_shown(&current);
+                    if is_working_tree(&rev) {
+                        base("log")
+                    } else {
+                        base("log").with("range", rev.clone()).with("rev", rev)
+                    }
                 }
-                reload();
-            }
+                _ => base("reflog"),
+            };
+            let weak = weak.clone();
+            crate::pick::launcher_picker(inv, move |picked| {
+                if let Some(d) = weak.upgrade() {
+                    if which == 1 {
+                        d.set_rev1_text(picked.into());
+                    } else {
+                        d.set_rev2_text(picked.into());
+                    }
+                    d.invoke_rev_entered();
+                }
+            });
         });
     }
     {

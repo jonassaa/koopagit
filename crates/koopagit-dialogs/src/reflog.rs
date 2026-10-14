@@ -236,7 +236,21 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     }
     {
         let weak = dlg.as_weak();
+        // `/outfile:<file>`: OK with exactly one entry selected writes its
+        // commit hash (`CRefLogDlg::OnBnClickedOk`, `m_SelectedHash`).
+        let outfile = ctx.invocation.get("outfile").map(PathBuf::from);
+        let a = actions.clone();
         dlg.on_ok(move || {
+            if let Some(file) = &outfile {
+                let rows = a.sel.sel.borrow().to_vec();
+                if let [row] = rows.as_slice() {
+                    if let Some(e) = a.entries(&[*row]).first() {
+                        if let Err(err) = std::fs::write(file, format!("{}\n", e.id)) {
+                            eprintln!("koopagit: {err}");
+                        }
+                    }
+                }
+            }
             if let Some(d) = weak.upgrade() {
                 let _ = d.hide();
             }

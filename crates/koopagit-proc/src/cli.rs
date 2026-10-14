@@ -666,12 +666,15 @@ const SPECS: &[Spec] = &[
         "reflog",
         "Open the RefLog dialog",
         REPO,
-        &[value(
-            "ref",
-            "ref",
-            "REF",
-            "Reference to show [default: HEAD]",
-        )],
+        &[
+            value("ref", "ref", "REF", "Reference to show [default: HEAD]"),
+            value(
+                "outfile",
+                "out-file",
+                "FILE",
+                "On OK, write the selected entry's commit hash to this file",
+            ),
+        ],
     ),
     spec(
         "remove",
