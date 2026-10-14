@@ -1,6 +1,8 @@
 //! Slint implementations of TortoiseProc's dialogs.
 
-slint::include_modules!();
+// The Slint components live in their own crate so editing this one doesn't
+// recompile the generated code.
+pub use koopagit_ui::*;
 
 pub mod applypatch;
 pub mod clone;
