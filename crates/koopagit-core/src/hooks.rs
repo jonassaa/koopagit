@@ -162,7 +162,12 @@ fn temp_file(tag: &str, contents: &str) -> std::io::Result<PathBuf> {
 }
 
 fn quote(arg: &Path) -> String {
-    format!("\"{}\"", arg.to_string_lossy())
+    quote_str(&arg.to_string_lossy())
+}
+
+/// `CHooks::AddParam`.
+fn quote_str(arg: &str) -> String {
+    format!("\"{arg}\"")
 }
 
 /// The parameters each hook type receives (`CHooks::StartCommit` etc.).
@@ -176,6 +181,9 @@ pub enum HookArgs<'a> {
     PostCommit { amend: bool },
     /// pre/post-push: an error text file.
     Push { error: &'a str },
+    /// pre-rebase: the upstream and the branch being rebased, then an error
+    /// text file (`CHooks::PreRebase`, Hooks.cpp:417).
+    Rebase { upstream: &'a str, branch: &'a str },
 }
 
 /// Runs `hook` for `workdir` (`%root%` is replaced by the work-tree root) and
@@ -194,9 +202,20 @@ pub fn run(hook: &Hook, workdir: &Path, args: HookArgs<'_>) -> std::io::Result<H
             cmd.push_str(&quote(&mf));
             message_file = Some(mf);
         }
+        HookArgs::Rebase { upstream, branch } => {
+            cmd.push(' ');
+            cmd.push_str(&quote_str(upstream));
+            cmd.push(' ');
+            cmd.push_str(&quote_str(branch));
+        }
         HookArgs::PostCommit { .. } | HookArgs::Push { .. } => {}
     }
-    if let HookArgs::Push { error } = args {
+    let error = match args {
+        HookArgs::Push { error } => Some(error),
+        HookArgs::Rebase { .. } => Some(""),
+        HookArgs::Commit { .. } | HookArgs::PostCommit { .. } => None,
+    };
+    if let Some(error) = error {
         let ef = temp_file("error", error)?;
         cmd.push(' ');
         cmd.push_str(&quote(&ef));
@@ -316,5 +335,33 @@ mod tests {
         };
         let r = run(&failing, dir.path(), HookArgs::PostCommit { amend: false }).unwrap();
         assert_eq!(r.exit_code, 3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rebase_hook_gets_upstream_branch_error_file_and_cwd() {
+        let dir = tempfile::tempdir().unwrap();
+        let hook = Hook {
+            kind: HookType::PreRebase,
+            path: "*".into(),
+            command: "f() { test -f \"$3\" && echo \"$1|$2|$4\" >&2; exit 1; }; f".into(),
+            wait: true,
+            show: false,
+            enabled: true,
+        };
+        let r = run(
+            &hook,
+            dir.path(),
+            HookArgs::Rebase {
+                upstream: "origin/main",
+                branch: "topic",
+            },
+        )
+        .unwrap();
+        assert_eq!(r.exit_code, 1);
+        assert_eq!(
+            r.error.trim(),
+            format!("origin/main|topic|{}", dir.path().display())
+        );
     }
 }

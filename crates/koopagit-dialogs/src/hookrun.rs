@@ -1,6 +1,6 @@
 //! Running the client-side hook scripts configured on the Hook Scripts
 //! settings page (`CHooks::StartCommit`, `PreCommit`, `PostCommit`,
-//! `PrePush`, `PostPush`).
+//! `PrePush`, `PostPush`, `PreRebase`).
 
 use std::path::Path;
 
@@ -94,6 +94,19 @@ pub fn pre_push_or_ask(workdir: &Path) -> bool {
     match pre_push(workdir) {
         Ok(()) => true,
         Err(e) => msgbox::ask("KoopaGit", &e, &["Continue", "Abort"]) == Some(0),
+    }
+}
+
+/// pre-rebase (`CRebaseDlg::CheckRebaseCondition`, RebaseDlg.cpp:978): `Err`
+/// = the hook failed; the caller asks whether to proceed anyway.
+pub fn pre_rebase(workdir: &Path, upstream: &str, branch: &str) -> Result<(), String> {
+    let Some(h) = find(HookType::PreRebase, workdir) else {
+        return Ok(());
+    };
+    match hooks::run(&h, workdir, HookArgs::Rebase { upstream, branch }) {
+        Ok(r) if r.exit_code == 0 => Ok(()),
+        Ok(r) => Err(report(h.kind, r.exit_code, &r.error)),
+        Err(e) => Err(e.to_string()),
     }
 }
 

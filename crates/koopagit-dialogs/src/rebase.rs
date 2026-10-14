@@ -159,6 +159,8 @@ enum Stashed {
 enum Pending {
     None,
     StashBeforeStart,
+    /// The pre-rebase hook failed: Abort / Proceed anyway.
+    HookFailed,
     PopAfter,
     Finished,
     Conflict,
@@ -175,6 +177,8 @@ struct State {
     stage: Stage,
     stashed: Stashed,
     pending: Pending,
+    /// The user chose "Proceed anyway" after the pre-rebase hook failed.
+    hook_overridden: bool,
     settings: Settings,
 }
 
@@ -263,6 +267,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         stage: Stage::Choose,
         stashed: Stashed::No,
         pending: Pending::None,
+        hook_overridden: false,
         settings: ctx.settings.clone(),
     }));
     let sel = Rc::new(ListSel::default());
@@ -658,10 +663,48 @@ impl Ui {
         let Some(repo) = self.repo() else { return };
         let cherry_pick = self.state.borrow().cherry_pick;
         let git = repo.git();
+        // `CheckRebaseCondition` (RebaseDlg.cpp:946): a dirty working tree
+        // is stashed first, then the pre-rebase hook runs, and only then the
+        // fast-forward or the rebase itself.
+        let dirty = git
+            .run(["status", "--porcelain", "--untracked-files=no"])
+            .map(|o| !o.trim().is_empty())
+            .unwrap_or(false);
+        if dirty && self.state.borrow().stashed == Stashed::No {
+            let autostash = !cherry_pick
+                && git
+                    .run(["config", "--bool", "--get", "rebase.autostash"])
+                    .is_ok_and(|v| v.trim() == "true");
+            if autostash {
+                if git.run(["stash"]).is_ok() {
+                    self.state.borrow_mut().stashed = Stashed::Auto;
+                }
+            } else {
+                self.notice(
+                    Pending::StashBeforeStart,
+                    "The current working tree is not clean. Do you want to stash the changes?",
+                    &["Stash", "Abort"],
+                    false,
+                );
+                return;
+            }
+        }
         if !cherry_pick {
             let Some((branch, upstream)) = self.selection() else {
                 return;
             };
+            if !self.state.borrow().hook_overridden {
+                if let Err(e) = crate::hookrun::pre_rebase(repo.workdir(), &upstream, &branch) {
+                    // IDS_HOOKFAILED_TASK2..4; "Abort" is the default.
+                    self.notice(
+                        Pending::HookFailed,
+                        &format!("Hook script failed\n{e}"),
+                        &["Abort", "Proceed anyway"],
+                        true,
+                    );
+                    return;
+                }
+            }
             let onto = d.get_onto_enabled() && !d.get_onto_text().trim().is_empty();
             if !onto
                 && condition(&repo, &branch, &upstream, d.get_force()) == Condition::FastForward
@@ -685,30 +728,6 @@ impl Ui {
                     Ok(_) => self.finished("Fast-forwarded."),
                     Err(e) => self.notice(Pending::None, &e.to_string(), &[], true),
                 }
-                return;
-            }
-        }
-        // Dirty working tree: autostash or ask.
-        let dirty = git
-            .run(["status", "--porcelain", "--untracked-files=no"])
-            .map(|o| !o.trim().is_empty())
-            .unwrap_or(false);
-        if dirty && self.state.borrow().stashed == Stashed::No {
-            let autostash = !cherry_pick
-                && git
-                    .run(["config", "--bool", "--get", "rebase.autostash"])
-                    .is_ok_and(|v| v.trim() == "true");
-            if autostash {
-                if git.run(["stash"]).is_ok() {
-                    self.state.borrow_mut().stashed = Stashed::Auto;
-                }
-            } else {
-                self.notice(
-                    Pending::StashBeforeStart,
-                    "The current working tree is not clean. Do you want to stash the changes?",
-                    &["Stash", "Abort"],
-                    false,
-                );
                 return;
             }
         }
@@ -921,6 +940,10 @@ impl Ui {
                     }
                     Err(e) => self.notice(Pending::None, &e.to_string(), &[], true),
                 }
+            }
+            (Pending::HookFailed, 1) => {
+                self.state.borrow_mut().hook_overridden = true;
+                self.start();
             }
             (Pending::PopAfter, 0) => self.stash_pop(),
             (Pending::Finished, 0) => spawn_launcher(&self.launch("log")),
