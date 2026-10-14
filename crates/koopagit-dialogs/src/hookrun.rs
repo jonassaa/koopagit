@@ -89,11 +89,18 @@ pub fn pre_push(workdir: &Path) -> Result<(), String> {
     }
 }
 
-/// Runs pre-push and asks whether to continue when it fails. Returns `false` to abort.
+/// Runs pre-push and asks whether to proceed when it fails (AppUtils.cpp:2751:
+/// IDS_HOOKFAILED_TASK2..4, "Abort" is the default). Returns `false` to abort.
 pub fn pre_push_or_ask(workdir: &Path) -> bool {
     match pre_push(workdir) {
         Ok(()) => true,
-        Err(e) => msgbox::ask("KoopaGit", &e, &["Continue", "Abort"]) == Some(0),
+        Err(e) => {
+            msgbox::ask(
+                "KoopaGit",
+                &format!("Hook script failed\n{e}"),
+                &["Abort", "Proceed anyway"],
+            ) == Some(1)
+        }
     }
 }
 

@@ -513,7 +513,8 @@ pub fn remove(ctx: &mut Context) -> DialogResult<i32> {
             rel.len()
         )
     };
-    if msgbox::ask("KoopaGit", &question, &["Remove", "Abort"]) != Some(0) {
+    // RemoveCommand.cpp:124 and :149 default to the second button.
+    if msgbox::ask_default("KoopaGit", &question, &["Remove", "Abort"], 1) != Some(0) {
         return Ok(1);
     }
     let git = ctx.repo.git();
@@ -522,10 +523,11 @@ pub fn remove(ctx: &mut Context) -> DialogResult<i32> {
         let out = git.output(fileops::remove(p, keep))?;
         if out.success() {
             removed += 1;
-        } else if msgbox::ask(
+        } else if msgbox::ask_default(
             "KoopaGit",
             &format!("{}{}", out.stdout, out.stderr),
             &["Ignore", "Abort"],
+            1,
         ) != Some(0)
         {
             break;

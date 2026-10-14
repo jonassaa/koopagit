@@ -67,9 +67,12 @@ pub fn cancel_index(labels: &[String]) -> i32 {
 }
 
 /// Fills a message box: title, text, the buttons with their access keys, the
-/// Escape button, and Ctrl+C / Ctrl+Insert copying the text.
-pub fn configure(dlg: &MessageBox, title: &str, text: &str, buttons: &[&str]) {
+/// default (Enter) button — upstream's `MB_DEFBUTTONn` / `CMessageBox::Show`
+/// `nDef`, 0-based here —, the Escape button, and Ctrl+C / Ctrl+Insert
+/// copying the text.
+pub fn configure(dlg: &MessageBox, title: &str, text: &str, buttons: &[&str], default: usize) {
     dlg.set_dialog_title(title.into());
+    dlg.set_default_button(default.min(buttons.len().saturating_sub(1)) as i32);
     dlg.set_text(text.into());
     let (labels, keys): (Vec<String>, Vec<SharedString>) = buttons
         .iter()
@@ -89,18 +92,20 @@ pub fn configure(dlg: &MessageBox, title: &str, text: &str, buttons: &[&str]) {
 }
 
 /// Shows a message box and returns the index of the clicked button, or `None`
-/// if the window was closed. With `check` the second value is the checkbox state.
+/// if the window was closed. `default` is the button Enter answers. With
+/// `check` the second value is the checkbox state.
 pub fn ask_with_check(
     title: &str,
     text: &str,
     buttons: &[&str],
+    default: usize,
     check: Option<&str>,
 ) -> (Option<usize>, bool) {
     let Ok(dlg) = MessageBox::new() else {
         eprintln!("{title}: {text}");
         return (None, false);
     };
-    configure(&dlg, title, text, buttons);
+    configure(&dlg, title, text, buttons, default);
     dlg.set_check_text(check.unwrap_or_default().into());
     let choice = std::rc::Rc::new(std::cell::Cell::new(None));
     {
@@ -119,7 +124,12 @@ pub fn ask_with_check(
 }
 
 pub fn ask(title: &str, text: &str, buttons: &[&str]) -> Option<usize> {
-    ask_with_check(title, text, buttons, None).0
+    ask_default(title, text, buttons, 0)
+}
+
+/// [`ask`] with `default` (0-based) as the Enter button.
+pub fn ask_default(title: &str, text: &str, buttons: &[&str], default: usize) -> Option<usize> {
+    ask_with_check(title, text, buttons, default, None).0
 }
 
 pub fn info(title: &str, text: &str) {
@@ -138,11 +148,22 @@ pub fn ask_async(
     buttons: &[&str],
     on_answer: impl FnOnce(Option<usize>) + 'static,
 ) {
+    ask_async_default(title, text, buttons, 0, on_answer);
+}
+
+/// [`ask_async`] with `default` (0-based) as the Enter button.
+pub fn ask_async_default(
+    title: &str,
+    text: &str,
+    buttons: &[&str],
+    default: usize,
+    on_answer: impl FnOnce(Option<usize>) + 'static,
+) {
     let Ok(dlg) = MessageBox::new() else {
         on_answer(None);
         return;
     };
-    configure(&dlg, title, text, buttons);
+    configure(&dlg, title, text, buttons, default);
     let answer = std::rc::Rc::new(std::cell::RefCell::new(Some(
         Box::new(on_answer) as Box<dyn FnOnce(Option<usize>)>
     )));

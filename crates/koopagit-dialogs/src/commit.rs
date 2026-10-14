@@ -136,10 +136,12 @@ fn restore_after_commit(workdir: &Path, backups: &mut HashMap<String, PathBuf>, 
         return;
     }
     if !committed
-        && msgbox::ask(
+        // CommitDlg.cpp:3050: "Keep current state" is the default.
+        && msgbox::ask_default(
             "KoopaGit",
             RESTORE_TEXT,
             &["&Restore old state", "&Keep current state"],
+            1,
         ) != Some(0)
     {
         return;

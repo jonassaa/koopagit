@@ -37,6 +37,7 @@ pub fn daemon(ctx: &mut Context) -> DialogResult<i32> {
             "KoopaGit",
             DAEMON_WARNING,
             &["Proceed", "Abort"],
+            0,
             Some("Do not show again"),
         );
         if choice != Some(0) {
@@ -554,9 +555,10 @@ pub fn dropmove(ctx: &mut Context) -> DialogResult<i32> {
             }
         }
         let out = git.output(misccmds::mv_args(&src_rel, &join(&name)))?;
+        // On failure DropMoveCommand.cpp:130 asks Ignore/Abort, Abort default.
         if out.success() {
             moved += 1;
-        } else if msgbox::ask("KoopaGit", &out.stderr, &["Ignore", "Abort"]) != Some(0) {
+        } else if msgbox::ask_default("KoopaGit", &out.stderr, &["Ignore", "Abort"], 1) != Some(0) {
             return Ok(1);
         }
     }
