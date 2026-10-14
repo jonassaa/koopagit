@@ -9,13 +9,14 @@ and statuses, and `koopagit-shell invoke` starts `koopagit-proc` detached.
 ```sh
 cargo install --path crates/koopagit-shell   # koopagit-shell
 cargo install --path crates/koopagit-proc    # koopagit-proc (dialogs)
+cargo install --path crates/koopagit-merge   # koopagit-merge (KoopaGitMerge)
 sudo apt install python3-nautilus            # or: dnf install nautilus-python
 ./integrations/nautilus/install.sh
 nautilus -q
 ```
 
-`koopagit-proc` must sit next to `koopagit-shell` or be found via
-`KOOPAGIT_PROC`. Set `KOOPAGIT_SHELL` if the helper is not on Nautilus's PATH.
+`koopagit-proc` and `koopagit-merge` must sit next to `koopagit-shell` or be
+found via `KOOPAGIT_PROC` / `KOOPAGIT_MERGE`. Set `KOOPAGIT_SHELL` if the helper is not on Nautilus's PATH.
 
 ## Differences from Explorer
 

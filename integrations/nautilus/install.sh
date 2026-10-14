@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the KoopaGit Nautilus extension and emblems for the current user.
 # Requires nautilus-python (package: python3-nautilus / nautilus-python) and
-# koopagit-shell + koopagit-proc on PATH (or KOOPAGIT_SHELL set for Nautilus).
+# koopagit-shell, koopagit-proc and koopagit-merge on PATH (or KOOPAGIT_SHELL set for Nautilus).
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
