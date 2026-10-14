@@ -227,8 +227,6 @@ commands render through `KOOPAGIT_SNAPSHOT` without errors. Native context menus
 are verified by builder unit tests only; no interactive click-through yet.
 
 Known issues and leftovers (details in `docs/divergences.md`):
-- Revision graph lays every node out in one column, so merge edges overlap
-  the nodes between them (no branch columns yet).
 - Log: no Collapse/Expand; Shift-held menu variants and per-ref-label hover
   targeting are impossible with Slint's `ContextMenuArea`.
 - Reflog menu lacks Switch/Push/Delete <ref>/Search/Collapse and parent submenus.

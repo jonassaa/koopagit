@@ -33,6 +33,25 @@ use crate::progress::{PostAction, ProgressJob};
 use crate::selection::{Mods, Selection};
 use crate::{FileListBridge, FileRow, MenuBlock, keep_alive, msgbox, spawn_launcher};
 
+/// Copies a "Restore after commit" backup back over `dest`, touches it so the
+/// change is noticed (`CopyFile` + `CPathUtils::Touch`) and removes the backup.
+pub fn restore_backup(backup: &Path, dest: &Path) -> std::io::Result<()> {
+    std::fs::copy(backup, dest)?;
+    std::fs::File::options()
+        .write(true)
+        .open(dest)?
+        .set_modified(std::time::SystemTime::now())?;
+    let _ = std::fs::remove_file(backup);
+    Ok(())
+}
+
+/// Restores every backup into `workdir` (`CCommitDlg::RestoreFiles`).
+pub fn restore_all(workdir: &Path, backups: &HashMap<String, PathBuf>) {
+    for (rel, backup) in backups {
+        let _ = restore_backup(backup, &workdir.join(rel));
+    }
+}
+
 /// A refresh function bound after the menu is created (the dialog's reload
 /// closure usually needs the menu itself).
 pub type LateRefresh = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
@@ -246,6 +265,16 @@ impl FileListMenu {
     /// "Restore after commit" backups: repository path → backup file.
     pub fn backups(&self) -> HashMap<String, PathBuf> {
         self.backups.borrow().clone()
+    }
+
+    /// Replaces the backups, e.g. with those of a previous Commit dialog round.
+    pub fn set_backups(&self, backups: HashMap<String, PathBuf>) {
+        *self.backups.borrow_mut() = backups;
+    }
+
+    /// Takes the backups out, leaving none.
+    pub fn take_backups(&self) -> HashMap<String, PathBuf> {
+        std::mem::take(&mut *self.backups.borrow_mut())
     }
 
     fn click(&self, row: usize, mods: Mods) {
@@ -794,8 +823,7 @@ impl FileListMenu {
                         for rel in &rels {
                             let backup = m.backups.borrow_mut().remove(rel);
                             if let Some(b) = backup {
-                                let _ = std::fs::copy(&b, m.full(rel));
-                                let _ = std::fs::remove_file(&b);
+                                let _ = restore_backup(&b, &m.full(rel));
                             }
                         }
                         (m.host.refresh)();
@@ -1335,5 +1363,31 @@ mod tests {
         std::fs::write(dir.path().join("b.txt"), "b").unwrap();
         menu.delete_files(&items[1..2], true).unwrap();
         assert!(!dir.path().join("b.txt").exists());
+    }
+
+    #[test]
+    fn restore_all_copies_back_touches_and_drops_backups() {
+        use std::time::{Duration, SystemTime};
+        let work = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        std::fs::create_dir(work.path().join("sub")).unwrap();
+        std::fs::write(work.path().join("sub/a.txt"), "edited\n").unwrap();
+        let backup = store.path().join("a.txt");
+        std::fs::write(&backup, "original\n").unwrap();
+        let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(&backup)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+
+        let backups = HashMap::from([("sub/a.txt".to_owned(), backup.clone())]);
+        restore_all(work.path(), &backups);
+
+        let dest = work.path().join("sub/a.txt");
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "original\n");
+        assert!(std::fs::metadata(&dest).unwrap().modified().unwrap() > old);
+        assert!(!backup.exists(), "backup is removed after restoring");
     }
 }

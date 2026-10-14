@@ -31,8 +31,6 @@ platform forces a change.
 | Settings store | Registry `HKCU\Software\TortoiseGit\...` (and some HKLM policy values). | Plain text file `settings.ini` (`%APPDATA%\koopagit`, `$XDG_CONFIG_HOME/koopagit` or `~/.config/koopagit`; override with `KOOPAGIT_SETTINGS`). Keys keep their upstream names with `\` separating sub-keys. HKLM policy masks are not read. | No registry on macOS/Linux; one format everywhere. |
 | PuTTY / Pageant | "Autoload Putty Key" options and TortoiseGitPlink. | Not offered; git uses the platform's SSH agent/config. | PuTTY/Pageant are Windows-specific. |
 | Recycle bin | Revert and Clean up move files to the recycle bin by default (`RevertWithRecycleBin`). | The platform trash via the `trash` crate (Windows Recycle Bin, macOS Trash, freedesktop Trash). Files that cannot be trashed are listed; Revert then restores them anyway. | The recycle bin is a Windows shell feature; each platform has its own trash API. |
-Every place KoopaGit deliberately behaves differently from TortoiseGit, with the reason.
-
 ## Remote operations (Push, Pull, Fetch, Sync, Clone)
 
 - **PuTTY key / Pageant** ("Autoload Putty Key", "Load Putty Key", `remote.<name>.puttykeyfile`): omitted. PuTTY and Pageant are Windows-only; on every platform KoopaGit relies on git's own SSH configuration (ssh-agent, `core.sshCommand`).
@@ -43,7 +41,6 @@ Every place KoopaGit deliberately behaves differently from TortoiseGit, with the
 - **Sync dialog**: Push notes, Compare tags, Ref List, the Submodule and Stash split buttons, and Apply/Email Patch are not implemented yet. Shift+click shortcuts to the full Pull/Fetch/Push dialogs are not available.
 - **Sync In/Out ChangeList tabs**: filled when the dialog opens or the refs change, from the merge base of the local and remote branch (In: merge base → remote; Out: merge base → local). Upstream fills In ChangeList only after a pull/fetch, from the old and new remote hash. The Conflicts tab is not implemented.
 - **Pull "Merge unrelated histories" and "Reset" post-buttons**: not offered. The post-command buttons launch `/command:` invocations, and TortoiseGit has no command-line form for these two actions.
-- **Push "Request pull"** launches `/command:requestpull`, which is not implemented yet.
 - **Fetch/Pull "Launch Rebase After Fetch"** opens `/command:rebase /upstream:<ref>` after the fetch, instead of opening the Rebase dialog in-process.
 
 ## Settings dialog
@@ -66,19 +63,14 @@ Every place KoopaGit deliberately behaves differently from TortoiseGit, with the
 | Conflict editor | TortoiseGitMerge three-way view of BASE / MINE / THEIRS. | Works from the conflict markers in the working-tree file (theirs left, mine right, merged preview); BASE is not shown unless diff3 markers are present. | Simpler first implementation. |
 | Viewer processes | TortoiseGitUDiff and TortoiseGitBlame are separate executables. | Shown in-process by `koopagit-proc`; only `koopagit-merge` is a separate binary. | Fewer binaries; same command names. |
 | `/diff:<patch>` | Review/apply a patch in TortoiseGitMerge. | Displays the patch in the unified-diff viewer only. | Patch apply not implemented yet. |
-| Folder compare | File Diff dialog for `showcompare`/`prevdiff` on folders. | Unified diff instead. | File Diff dialog not implemented yet. |
 | Image diff | TortoiseGitIDiff. | Not available. | Out of scope for now. |
 
 ## Log, RefLog, Browse References, Reset
 
 | Area | TortoiseGit | KoopaGit | Reason |
 |---|---|---|---|
-| Cherry Pick (log menu) | Opens the Rebase dialog in cherry-pick mode. | Runs `git cherry-pick <sha>` in the progress dialog. | Rebase dialog has no cherry-pick mode yet. |
 | Copy to clipboard | Win32 clipboard. | `pbcopy` / `clip` / `wl-copy`, `xclip`, `xsel`; if none works the text is shown in a copyable field. | Slint has no portable clipboard API. |
-| Reset dialog | Modal from Log/RefLog/Browse References (no `/command:`). | Non-blocking window from the same places; single commit field instead of Branch/Tag/Commit picker. | Avoids nested event loops in Slint. |
 | Reset dialog | Modal from Log/RefLog/Browse References (no `/command:`). | Non-blocking window from the same places, with the same Branch/Tag/Commit picker. | Avoids nested event loops in Slint. |
-| Browse References | Tree view grouped by heads/remotes/tags. | Flat, filterable list. | Not implemented yet. |
-| Bare repositories | `log` accepts a bare repo. | `log` requires a working tree. | Launcher path requirement not split yet. |
 
 ## Reflog, refs, rebase and viewer menus
 
@@ -97,11 +89,9 @@ Every place KoopaGit deliberately behaves differently from TortoiseGit, with the
 
 | Area | TortoiseGit | KoopaGit | Reason |
 |---|---|---|---|
-| Recycle bin | Revert and Clean move files to the recycle bin (`RevertWithRecycleBin`). | Files are discarded permanently (`git checkout -f`, `git clean`). | No portable trash API without a new dependency. |
 | Questions inside dialogs | Separate message boxes. | Shown in a notice bar inside the dialog. | Slint does not support nested modal event loops. |
 | Revert pre-check | Only directly selected and added files are pre-checked. | When the whole repository is selected every row starts checked. | Avoids an all-unchecked list. |
 | Git Init special folders | Drive roots, Desktop, Profile, Documents, Windows, System, Program Files. | `/`, the home folder, `~/Desktop`, `~/Documents` (Windows equivalents on Windows). | Platform equivalents. |
-| Not yet implemented | Merge "Remove branch" / "Merge unrelated history" post buttons, Add "+x"/symlink, Clean "to recycle bin" after dry run, file-list context menus. | Absent. | Not implemented yet. |
 
 ## File list context menu
 
@@ -115,7 +105,7 @@ Every place KoopaGit deliberately behaves differently from TortoiseGit, with the
 | "View revision in alternative editor" | Uses the Alternative editor setting. | Opens with the OS default application. | The Alternative editor settings page is a stub. |
 | "Open with..." | Windows "Open with" dialog. | Windows: same dialog; macOS/Linux: pick an application, then open the file with it. | No cross-platform "Open with" chooser. |
 | Recycle bin on revert | Moves the working-tree file to the Recycle Bin before reverting. | Moves a copy of the file to the OS trash, then reverts. | Same recoverability with the `trash` crate. |
-| "Restore after commit" | Backups are restored or kept by a prompt after committing. | Backups can be created and restored from the menu; the after-commit prompt is not implemented yet. | Not implemented yet. |
+| "Restore after commit" | After a successful commit the marked files are restored silently; after a failed commit, or on Cancel, the user picks "Restore old state" / "Keep current state" (plus Cancel). | Same. The failed-commit question is a message box; the Cancel-time question is shown in the Commit dialog's notice bar. | Slint does not support nested modal event loops. |
 | "Show log" on a submodule row | Parent repository's log limited to the submodule path (`/submodule`). | The launcher discovers the submodule's own repository from that path. | Launcher `/submodule` handling not implemented yet. |
 ## Log menus
 
@@ -142,7 +132,6 @@ Every place KoopaGit deliberately behaves differently from TortoiseGit, with the
 | File Diff list | Columns `File` / `Action`, own context menu (spec-menus §1.7). | Same columns and menu (`menus/filediff.rs`). "Show changes as unified diff" with the working tree as version 1 shows `version 2..Working Tree`, i.e. the reverse direction. | `/command:showcompare /unified` only diffs from a revision to the working tree. |
 | Export post button | `Explore to` after a successful export. | Not offered. | Post buttons can only launch commands or run git. |
 | Format Patch pickers | `...` buttons open the log / reference browser. | Editable combos with history and branches; folder picker for the output directory. | No picker windows yet. |
-| Send Mail | Format Patch / Request pull open the Send Mail dialog. | Launch `/command:sendmail`, which is not implemented yet. | Send Mail is a later phase. |
 | Apply Patches list | Drag & drop of patch files; patch list context menu. | Add button (native file picker) only. | Not implemented yet. |
 | Import patch outside a repository | `ChooseRepository` folder dialog. | Current directory first, then a native folder picker. | Same flow, platform picker. |
 | Worktree lock reason | libgit2 lock without a reason. | `git worktree lock` (no reason prompt either). | Same behaviour via the CLI. |
@@ -152,13 +141,8 @@ Every place KoopaGit deliberately behaves differently from TortoiseGit, with the
 | Repository Browser tree | Native tree view; revision chosen through the log dialog; drag & drop out of the browser. | Indented folder list with expand arrows; revision typed or picked from branches/tags; no drag & drop. | Slint has no tree view or drag-out; no log picker yet. |
 | Repository Browser "Open with..." | Windows "Open with" dialog. | Same as Open (default application). | No portable "open with" chooser. |
 | Recycle bin | Revert and Clean move files to the recycle bin (`RevertWithRecycleBin`). | Same, using the platform trash (`trash` crate). Clean's recycle mode runs `git clean -n` and trashes the listed paths (also inside submodules when "Submodules" is checked). | — |
-| Rebase dialog | Cherry-pick engine with Pick/Squash/Edit/Skip, Onto, Preserve merges, autostash, Continue after conflicts. | Pick/Squash/Skip; Edit replays like Pick; Squash keeps the earlier message (`commit --amend --no-edit`); a dirty work tree is refused; after a failed pick the user can Abort or keep the detached state. | Reduced first implementation. |
-| Questions inside dialogs | Separate message boxes. | Shown in a notice bar inside the dialog. | Slint does not support nested modal event loops. |
-| Revert pre-check | Only directly selected and added files are pre-checked. | When the whole repository is selected every row starts checked. | Avoids an all-unchecked list. |
-| Git Init special folders | Drive roots, Desktop, Profile, Documents, Windows, System, Program Files. | `/`, the home folder, `~/Desktop`, `~/Documents` (Windows equivalents on Windows). | Platform equivalents. |
 | Merge "Remove branch" | Asks for confirmation, then `git branch -D`. | The post button runs `git branch -D -- <branch>` in a progress window without an extra confirmation. | Post buttons can't show a nested question. |
 | Add "+x" / "Symlink" | Changes the index mode of the added files. | Same via `git update-index --chmod=+x` / `--cacheinfo 120000,...`; the symlink button is offered for at most 50 files (it pre-hashes their contents). | Bounded pre-work. |
-| Not yet implemented | File-list context menus. | Absent. | Not implemented yet. |
 
 ## Remaining commands
 
