@@ -106,7 +106,6 @@ platform forces a change.
 | "Open with..." | Windows "Open with" dialog. | Windows: same dialog; macOS/Linux: pick an application, then open the file with it. | No cross-platform "Open with" chooser. |
 | Recycle bin on revert | Moves the working-tree file to the Recycle Bin before reverting. | Moves a copy of the file to the OS trash, then reverts. | Same recoverability with the `trash` crate. |
 | "Restore after commit" | After a successful commit the marked files are restored silently; after a failed commit, or on Cancel, the user picks "Restore old state" / "Keep current state" (plus Cancel). | Same. The failed-commit question is a message box; the Cancel-time question is shown in the Commit dialog's notice bar. | Slint does not support nested modal event loops. |
-| "Show log" on a submodule row | Parent repository's log limited to the submodule path (`/submodule`). | The launcher discovers the submodule's own repository from that path. | Launcher `/submodule` handling not implemented yet. |
 ## Log menus
 
 | Area | TortoiseGit | koopagit | Reason |
