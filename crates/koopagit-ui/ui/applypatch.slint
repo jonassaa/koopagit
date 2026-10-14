@@ -37,6 +37,10 @@ export component ApplyPatchDialog inherits KoopaWindow {
     callback remove();
     callback apply();
     callback cancel();
+    // Patch list menu (CPatchListCtrl::OnContextMenu without "Apply Patch...").
+    callback view-patch(int);
+    callback review-patch(int);
+    callback send-mail(int);
 
     title: root.dialog-title;
     preferred-width: 700px;
@@ -112,6 +116,20 @@ export component ApplyPatchDialog inherits KoopaWindow {
                                         root.current-row = i;
                                         root.row-selected(i);
                                     }
+                                    // CPatchListCtrl: double-click views the patch,
+                                    // right-click opens the patch menu.
+                                    double-clicked => { root.view-patch(i); }
+                                    pointer-event(e) => {
+                                        if (e.button == PointerEventButton.right && e.kind == PointerEventKind.down) {
+                                            list-keys.focus();
+                                            root.current-row = i;
+                                            root.row-selected(i);
+                                            patch-menu.show({
+                                                x: self.absolute-position.x + self.mouse-x,
+                                                y: self.absolute-position.y + self.mouse-y,
+                                            });
+                                        }
+                                    }
                                 }
                                 HorizontalLayout {
                                     padding-left: 6px;
@@ -185,6 +203,14 @@ export component ApplyPatchDialog inherits KoopaWindow {
                     clicked => { root.cancel(); }
                 }
             }
+        }
+    }
+
+    patch-menu := ContextMenuArea {
+        Menu {
+            MenuItem { title: "View Patch"; activated => { root.view-patch(root.current-row); } }
+            MenuItem { title: "Review Patch with KoopaGitMerge"; activated => { root.review-patch(root.current-row); } }
+            MenuItem { title: "Send Mail..."; activated => { root.send-mail(root.current-row); } }
         }
     }
 }
