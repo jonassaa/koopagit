@@ -203,7 +203,7 @@ fn pick_files(
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     if !*accepted.borrow() {
         return Ok(None);
@@ -573,7 +573,7 @@ pub fn input(
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(result.take())
 }
@@ -656,7 +656,7 @@ pub fn ignore(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     if !*accepted.borrow() {
         return Ok(1);
@@ -755,7 +755,7 @@ pub fn cleanup(ctx: &mut Context) -> DialogResult<i32> {
         });
     }
     if !noui {
-        crate::snapshot::arm(&dlg);
+        crate::window::prepare(&dlg);
         dlg.run()?;
     }
     if !*accepted.borrow() {
@@ -975,7 +975,7 @@ pub fn repocreate(inv: &Invocation) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     if !*accepted.borrow() {
         return Ok(1);

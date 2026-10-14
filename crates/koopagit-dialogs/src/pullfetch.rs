@@ -222,7 +222,7 @@ fn run(ctx: &mut Context, is_fetch: bool) -> DialogResult<i32> {
     }
     dlg.on_notice_clicked(|_| {});
 
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let Some(dec) = decision.borrow_mut().take() else {
         return Ok(1);

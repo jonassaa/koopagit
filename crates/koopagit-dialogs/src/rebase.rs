@@ -366,7 +366,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         let ui = ui.clone();
         dlg.on_notice_clicked(move |i| ui.notice_clicked(i));
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let finished = state.borrow().stage == Stage::Finished;
     Ok(if finished { 0 } else { 1 })

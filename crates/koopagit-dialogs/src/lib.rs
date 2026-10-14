@@ -32,6 +32,7 @@ pub mod subadd;
 pub mod sync;
 pub mod trashcan;
 pub mod viewers;
+pub mod window;
 pub mod workingtree;
 pub mod worktree;
 

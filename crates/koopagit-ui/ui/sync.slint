@@ -6,6 +6,8 @@ import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { FileList, FileRow } from "common.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
+import { HeaderText, ListHeader, RowBackground } from "common.slint";
 
 export struct SyncCommit {
     id: string,
@@ -23,31 +25,36 @@ component CommitList inherits Rectangle {
     pure callback menu(int) -> [MenuBlock];
     callback chosen(int, int);
     border-width: 1px;
-    border-color: #8886;
+    border-color: Theme.border;
+    border-radius: Theme.panel-radius;
+    background: Theme.surface;
+    clip: Theme.modern;
     VerticalLayout {
-        Rectangle {
-            height: 22px;
-            background: #8882;
+        ListHeader {
             HorizontalLayout {
                 padding-left: 6px;
                 spacing: 6px;
-                Text { text: "SHA-1"; width: 80px; font-weight: 600; vertical-alignment: center; }
-                Text { text: "Message"; horizontal-stretch: 1; font-weight: 600; vertical-alignment: center; }
-                Text { text: "Author"; width: 120px; font-weight: 600; vertical-alignment: center; }
-                Text { text: "Date"; width: 130px; font-weight: 600; vertical-alignment: center; }
+                HeaderText { text: "SHA-1"; width: 80px; }
+                HeaderText { text: "Message"; horizontal-stretch: 1; }
+                HeaderText { text: "Author"; width: 120px; }
+                HeaderText { text: "Date"; width: 130px; }
             }
         }
         if root.commits.length == 0: Text {
             text: root.empty-text;
-            color: #888;
+            color: Theme.faint;
             horizontal-alignment: center;
             vertical-alignment: center;
             vertical-stretch: 1;
         }
         if root.commits.length > 0: ListView {
             for c[i] in root.commits: Rectangle {
-                height: 22px;
-                background: c.selected ? #0366d633 : transparent;
+                height: Theme.row-height;
+                RowBackground {
+                    width: parent.width;
+                    height: parent.height;
+                    selected: c.selected;
+                }
                 DynMenuArea {
                     blocks() => { return root.menu(i); }
                     chosen(id) => { root.chosen(i, id); }

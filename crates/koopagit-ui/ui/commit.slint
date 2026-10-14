@@ -5,6 +5,7 @@ import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { DialogKeys, KeyboardPrefs } from "keys.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
 
 export component CommitDialog inherits KoopaWindow {
     in property <string> dialog-title: "Commit - KoopaGit";
@@ -279,9 +280,10 @@ export component CommitDialog inherits KoopaWindow {
         x: root.width - 260px;
         y: root.height - 120px;
         Rectangle {
-            background: #ffffff;
+            background: Theme.modern ? Theme.popup-bg : #ffffff;
             border-width: 1px;
-            border-color: #888;
+            border-color: Theme.border-strong;
+            border-radius: Theme.modern ? 8px : 0px;
             VerticalLayout {
                 padding: 4px;
                 for label[i] in ["Commit", "ReCommit", "Commit & Push"]: Rectangle {

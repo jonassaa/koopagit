@@ -442,6 +442,13 @@ fn general(env: &Env) -> Vec<Opt> {
             },
             Store::Reg("LanguageID", "1033"),
         ),
+        // KoopaGit addition: Classic is TortoiseGit's look (docs/divergences.md).
+        combo_index(
+            "Theme:",
+            crate::window::THEME_KEY,
+            "0",
+            &["Classic", "Light", "Dark"],
+        ),
         check(
             "Automatically check for newer versions every week",
             "VersionCheck",

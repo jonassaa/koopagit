@@ -286,6 +286,7 @@ fn load_items(ctx: &Context, show_unversioned: bool, whole: bool, amend: bool) -
 
 fn show(ctx: &Context, carry: &mut Carry) -> DialogResult<Option<Decision>> {
     let dlg = CommitDialog::new()?;
+    crate::window::apply_theme(&dlg);
     let repo = &ctx.repo;
     let forced_whole = whole_project_forced(ctx);
     let whole = forced_whole || ctx.settings.bool(&whole_project_key(ctx), false);
@@ -698,7 +699,7 @@ fn show(ctx: &Context, carry: &mut Carry) -> DialogResult<Option<Decision>> {
         });
     }
 
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
 
     let decision = state.borrow_mut().decision.take();

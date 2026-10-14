@@ -6,6 +6,8 @@ import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys } from "keys.slint";
+import { Theme } from "theme.slint";
+import { HeaderText, ListHeader, RowBackground } from "common.slint";
 
 export struct TreeNodeRow {
     name: string,
@@ -24,11 +26,7 @@ export struct RepoEntryRow {
     selected: bool,
 }
 
-component HeaderCell inherits Text {
-    font-weight: 600;
-    vertical-alignment: center;
-    overflow: elide;
-}
+component HeaderCell inherits HeaderText {}
 
 component Cell inherits Text {
     vertical-alignment: center;
@@ -95,11 +93,18 @@ export component RepoBrowserDialog inherits KoopaWindow {
                 Rectangle {
                     width: 240px;
                     border-width: 1px;
-                    border-color: #8886;
+                    border-color: Theme.border;
+                    border-radius: Theme.panel-radius;
+                    background: Theme.surface;
+                    clip: Theme.modern;
                     ListView {
                         for node[i] in root.tree: Rectangle {
-                            height: 22px;
-                            background: node.selected ? Colors.selection : transparent;
+                            height: Theme.row-height;
+                            RowBackground {
+                                width: parent.width;
+                                height: parent.height;
+                                selected: node.selected;
+                            }
                             DynMenuArea {
                                 blocks() => { return root.tree-menu-for(i); }
                                 chosen(id) => { root.tree-menu-action(i, id); }
@@ -130,11 +135,12 @@ export component RepoBrowserDialog inherits KoopaWindow {
                 Rectangle {
                     horizontal-stretch: 1;
                     border-width: 1px;
-                    border-color: #8886;
+                    border-color: Theme.border;
+                    border-radius: Theme.panel-radius;
+                    background: Theme.surface;
+                    clip: Theme.modern;
                     VerticalLayout {
-                        Rectangle {
-                            height: 22px;
-                            background: Colors.header-bg;
+                        ListHeader {
                             HorizontalLayout {
                                 padding-left: 6px;
                                 spacing: 6px;
@@ -158,8 +164,12 @@ export component RepoBrowserDialog inherits KoopaWindow {
                             }
                             ListView {
                                 for e[i] in root.entries: Rectangle {
-                                    height: 22px;
-                                    background: e.selected ? Colors.selection : transparent;
+                                    height: Theme.row-height;
+                                    RowBackground {
+                                        width: parent.width;
+                                        height: parent.height;
+                                        selected: e.selected;
+                                    }
                                     DynMenuArea {
                                         blocks() => { return root.menu-for(i); }
                                         chosen(id) => { root.menu-action(id); }
@@ -201,7 +211,7 @@ export component RepoBrowserDialog inherits KoopaWindow {
             }
             HorizontalBox {
                 padding: 0;
-                Text { text: root.info; color: #888; vertical-alignment: center; horizontal-stretch: 1; wrap: word-wrap; }
+                Text { text: root.info; color: Theme.faint; vertical-alignment: center; horizontal-stretch: 1; wrap: word-wrap; }
                 Button { text: "OK"; primary: true; clicked => { root.ok(); } }
                 Button { text: "Cancel"; clicked => { root.cancel(); } }
             }

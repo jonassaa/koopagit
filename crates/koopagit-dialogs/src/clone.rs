@@ -132,7 +132,7 @@ pub fn run(cwd: &Path, inv: &Invocation, settings: &Settings) -> DialogResult<i3
         });
     }
 
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let Some(o) = chosen.borrow_mut().take() else {
         return Ok(1);

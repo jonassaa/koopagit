@@ -4,19 +4,20 @@ import { Button, CheckBox, ComboBox, ListView, TextEdit, VerticalBox, Horizontal
 import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
 
 export global ViewerStyle {
     in-out property <string> mono: "Menlo";
     out property <length> row-height: 18px;
-    out property <color> removed-bg: #d73a4930;
-    out property <color> added-bg: #28a74530;
-    out property <color> changed-bg: #e3b34130;
-    out property <color> empty-bg: #8881;
-    out property <color> conflict-bg: #d73a4950;
-    out property <color> resolved-bg: #28a74520;
-    out property <color> header-bg: #0366d630;
-    out property <color> current-border: #0366d6;
-    out property <color> gutter: #8888;
+    out property <color> removed-bg: Theme.modern ? Theme.diff-del : #d73a4930;
+    out property <color> added-bg: Theme.modern ? Theme.diff-add : #28a74530;
+    out property <color> changed-bg: Theme.diff-changed;
+    out property <color> empty-bg: Theme.diff-empty;
+    out property <color> conflict-bg: Theme.diff-conflict;
+    out property <color> resolved-bg: Theme.diff-resolved;
+    out property <color> header-bg: Theme.diff-header;
+    out property <color> current-border: Theme.accent;
+    out property <color> gutter: Theme.gutter;
 }
 
 // Accelerators of the viewer windows (docs/spec/spec-keyboard.md §4). Keys are
@@ -397,7 +398,7 @@ export component UDiffViewer inherits KoopaWindow {
                         width: parent.width - 12px;
                         text: line.text;
                         font-weight: line.kind == 4 ? 700 : 400;
-                        color: line.kind == 3 ? #6f42c1 : Palette.foreground;
+                        color: line.kind == 3 ? Theme.diff-hunk-fg : Palette.foreground;
                     }
                 }
             }
@@ -456,7 +457,7 @@ export component BlameViewer inherits KoopaWindow {
                 vertical-stretch: 1;
                 for row[i] in root.rows: Rectangle {
                     height: ViewerStyle.row-height;
-                    background: i == root.current ? #0366d633 : row.shade ? ViewerStyle.empty-bg : transparent;
+                    background: i == root.current ? Theme.selection : row.shade ? ViewerStyle.empty-bg : transparent;
                     DynMenuArea {
                         blocks() => { return root.line-menu(i); }
                         chosen(id) => { root.line-menu-action(i, id); }
@@ -475,7 +476,7 @@ export component BlameViewer inherits KoopaWindow {
                     HorizontalLayout {
                         spacing: 6px;
                         padding-left: 4px;
-                        MonoText { text: row.first-of-group ? row.commit : ""; width: 70px; color: #0366d6; }
+                        MonoText { text: row.first-of-group ? row.commit : ""; width: 70px; color: Theme.link; }
                         MonoText { text: row.first-of-group ? row.author : ""; width: 140px; }
                         MonoText { text: row.first-of-group ? row.date : ""; width: 120px; color: ViewerStyle.gutter; }
                         MonoText { text: row.line-no; width: 44px; horizontal-alignment: right; color: ViewerStyle.gutter; }

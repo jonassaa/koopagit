@@ -131,7 +131,7 @@ pub fn submodule_add(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
 
     let Some((repo, path, branch, force)) = decided.borrow_mut().take() else {
@@ -232,7 +232,7 @@ pub fn request_pull(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
 
     let Some((start, url, end)) = decided.borrow_mut().take() else {

@@ -6,6 +6,8 @@ import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys, SpaceActivate } from "keys.slint";
 import { KeyMenu } from "remote_widgets.slint";
+import { Theme } from "theme.slint";
+import { HeaderText, ListHeader, RowBackground } from "common.slint";
 
 export struct RebaseRow {
     action: int, // 0 Pick, 1 Squash, 2 Edit, 3 Skip
@@ -16,11 +18,7 @@ export struct RebaseRow {
     selected: bool,
 }
 
-component HeaderCell inherits Text {
-    font-weight: 600;
-    vertical-alignment: center;
-    overflow: elide;
-}
+component HeaderCell inherits HeaderText {}
 
 component Cell inherits Text {
     vertical-alignment: center;
@@ -229,11 +227,12 @@ export component RebaseDialog inherits KoopaWindow {
                     }
                     Rectangle {
                         border-width: 1px;
-                        border-color: commit-list.has-focus ? Palette.accent-background : #8886;
+                        border-color: commit-list.has-focus ? Palette.accent-background : Theme.border;
+                        border-radius: Theme.panel-radius;
+                        background: Theme.surface;
+                        clip: Theme.modern;
                         VerticalLayout {
-                            Rectangle {
-                                height: 22px;
-                                background: Colors.header-bg;
+                            ListHeader {
                                 HorizontalLayout {
                                     padding-left: 6px;
                                     spacing: 6px;
@@ -245,8 +244,13 @@ export component RebaseDialog inherits KoopaWindow {
                             }
                             ListView {
                                 for row[i] in root.rows: Rectangle {
-                                    height: 22px;
-                                    background: row.selected ? Colors.selection : row.state == 1 ? #e3b34140 : transparent;
+                                    height: Theme.row-height;
+                                    RowBackground {
+                                        width: parent.width;
+                                        height: parent.height;
+                                        selected: row.selected;
+                                        fill: row.state == 1 ? Theme.pending : transparent;
+                                    }
                                     DynMenuArea {
                                         blocks() => { return root.menu-for(i); }
                                         chosen(id) => { root.menu-action(i, id); }
@@ -271,14 +275,14 @@ export component RebaseDialog inherits KoopaWindow {
                                             width: 70px;
                                             text: row.state == 2 ? "Done" : row.state == 1 ? "Current"
                                                 : row.action == 0 ? "Pick" : row.action == 1 ? "Squash" : row.action == 2 ? "Edit" : "Skip";
-                                            color: row.action == 3 || row.state == 2 ? #8888 : Palette.foreground;
+                                            color: row.action == 3 || row.state == 2 ? Theme.disabled : Palette.foreground;
                                             font-weight: row.state == 1 ? 700 : 400;
                                         }
                                         Cell { width: 80px; text: row.hash; font-family: "Menlo"; }
                                         Cell {
                                             horizontal-stretch: 1;
                                             text: row.subject;
-                                            color: row.action == 3 ? #8888 : Palette.foreground;
+                                            color: row.action == 3 ? Theme.disabled : Palette.foreground;
                                         }
                                         Cell { width: 140px; text: row.author; }
                                     }
@@ -332,7 +336,9 @@ export component RebaseDialog inherits KoopaWindow {
                         height: 26px;
                         width: 120px;
                         border-radius: 3px;
-                        background: root.tab == k ? Colors.selection : Colors.header-bg;
+                        background: root.tab == k ? Colors.selection : Theme.modern ? Theme.surface : Colors.header-bg;
+                        border-width: Theme.modern ? 1px : 0px;
+                        border-color: Theme.border;
                         Text { text: t; horizontal-alignment: center; vertical-alignment: center; }
                         tab-keys := SpaceActivate { activated => { root.tab = k; } }
                         TouchArea {
@@ -359,12 +365,12 @@ export component RebaseDialog inherits KoopaWindow {
                 }
                 Rectangle {
                     height: 6px;
-                    background: Colors.header-bg;
+                    background: Theme.modern ? Theme.border : Colors.header-bg;
                     border-radius: 3px;
                     Rectangle {
                         x: 0;
                         width: parent.width * root.progress;
-                        background: #2f7ed8;
+                        background: Theme.progress;
                         border-radius: 3px;
                     }
                 }

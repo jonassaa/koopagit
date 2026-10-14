@@ -450,7 +450,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(0)
 }
@@ -494,6 +494,7 @@ fn run_git_then_reload(
 /// Asks before deleting refs (`CAppUtils::DeleteRef`), without a nested loop.
 fn confirm_delete(state: &Rc<RefCell<State>>, refresh: &Rc<dyn Fn()>, refs: Vec<RefLabel>) {
     let Ok(mb) = MessageBox::new() else { return };
+    crate::window::apply_theme(&mb);
     let names: Vec<&str> = refs.iter().map(|r| r.name.as_str()).collect();
     mb.set_dialog_title("KoopaGit".into());
     mb.set_text(format!("Do you really want to delete {}?", names.join(", ")).into());

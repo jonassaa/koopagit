@@ -5,6 +5,7 @@ import { NoticeBar } from "msgbox.slint";
 import { DialogKeys, SpaceActivate } from "keys.slint";
 import { Radio } from "choose.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
 
 export component PullFetchDialog inherits KoopaWindow {
     in property <string> dialog-title: "Pull";
@@ -165,12 +166,12 @@ export component PullFetchDialog inherits KoopaWindow {
                     HorizontalLayout {
                         spacing: 6px;
                         TriCheck { text: "Tags"; state <=> root.tags; width: 120px; }
-                        Text { text: root.tags-default; vertical-alignment: center; color: #888; }
+                        Text { text: root.tags-default; vertical-alignment: center; color: Theme.faint; }
                     }
                     HorizontalLayout {
                         spacing: 6px;
                         TriCheck { text: "Prune"; state <=> root.prune; width: 120px; }
-                        Text { text: root.prune-default; vertical-alignment: center; color: #888; }
+                        Text { text: root.prune-default; vertical-alignment: center; color: Theme.faint; }
                     }
                 }
             }
@@ -178,7 +179,7 @@ export component PullFetchDialog inherits KoopaWindow {
                 spacing: 12px;
                 Text {
                     text: "Manage Remotes";
-                    color: #0366d6;
+                    color: Theme.link;
                     vertical-alignment: center;
                     // CLinkControl: a tab stop that Space or Enter activates.
                     manage-link := SpaceActivate {

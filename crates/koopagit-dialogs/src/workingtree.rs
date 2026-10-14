@@ -206,7 +206,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     ctx.settings
         .set_bool("AddBeforeCommit", dlg.get_show_unversioned());

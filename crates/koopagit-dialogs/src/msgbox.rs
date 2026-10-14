@@ -118,7 +118,7 @@ pub fn ask_with_check(
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     let _ = dlg.run();
     (choice.get(), dlg.get_checked())
 }
@@ -163,6 +163,7 @@ pub fn ask_async_default(
         on_answer(None);
         return;
     };
+    crate::window::apply_theme(&dlg);
     configure(&dlg, title, text, buttons, default);
     let answer = std::rc::Rc::new(std::cell::RefCell::new(Some(
         Box::new(on_answer) as Box<dyn FnOnce(Option<usize>)>

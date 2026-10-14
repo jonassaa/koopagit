@@ -1633,7 +1633,7 @@ pub fn run(repo: Option<&Repo>, settings: Settings, inv: &Invocation) -> DialogR
         });
     }
 
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(0)
 }

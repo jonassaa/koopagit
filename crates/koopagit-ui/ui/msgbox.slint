@@ -2,6 +2,7 @@
 import { Button, VerticalBox, HorizontalBox, CheckBox } from "std-widgets.slint";
 import { DialogKeys } from "keys.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
 
 export component MessageBox inherits KoopaWindow {
     in property <string> dialog-title: "KoopaGit";
@@ -67,8 +68,8 @@ export component NoticeBar inherits Rectangle {
     callback clicked(int);
     visible: root.text != "";
     height: root.text == "" ? 0px : layout.preferred-height;
-    background: root.error ? #d73a4922 : #0366d622;
-    border-radius: 4px;
+    background: root.error ? Theme.notice-error-bg : Theme.notice-bg;
+    border-radius: Theme.modern ? 6px : 4px;
     layout := HorizontalBox {
         Text { text: root.text; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; }
         for b[i] in root.buttons: Button { text: b; clicked => { root.clicked(i); } }

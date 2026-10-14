@@ -3,6 +3,7 @@ import { Button, CheckBox, LineEdit, TextEdit, ComboBox, ListView, ScrollView, V
 import { NoticeBar } from "msgbox.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys, SpaceActivate } from "keys.slint";
+import { Theme } from "theme.slint";
 
 // kind: 0 group, 1 note, 2 check, 3 tri-state, 4 text, 5 multiline, 6 number,
 //       7 combo, 8 radio, 9 button, 10 saved-data clear row, 11 colour
@@ -252,6 +253,9 @@ export component SettingsDialog inherits KoopaWindow {
                     Rectangle {
                         border-width: 1px;
                         border-color: tree-keys.has-focus ? Palette.accent-background : Palette.border;
+                        border-radius: Theme.panel-radius;
+                        background: Theme.surface;
+                        clip: Theme.modern;
                         ListView {
                             for item[i] in root.tree: Rectangle {
                                 height: 24px;
@@ -332,6 +336,9 @@ export component SettingsDialog inherits KoopaWindow {
                                 Rectangle {
                                     border-width: 1px;
                                     border-color: remote-keys.has-focus ? Palette.accent-background : Palette.border;
+                                    border-radius: Theme.panel-radius;
+                                    background: Theme.surface;
+                                    clip: Theme.modern;
                                     ListView {
                                         for r[i] in root.remotes: Rectangle {
                                             height: 22px;
@@ -370,6 +377,9 @@ export component SettingsDialog inherits KoopaWindow {
                                         height: 260px;
                                         border-width: 1px;
                                         border-color: Palette.border;
+                                        border-radius: Theme.panel-radius;
+                                        background: Theme.surface;
+                                        clip: Theme.modern;
                                         ListView {
                                             for c[i] in root.checklist: CheckBox {
                                                 height: 24px;

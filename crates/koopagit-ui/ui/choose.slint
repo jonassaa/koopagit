@@ -2,6 +2,7 @@
 // used by Switch, Create Branch/Tag, Merge and Reset.
 import { ComboBox, LineEdit, Palette } from "std-widgets.slint";
 import { SpaceActivate } from "keys.slint";
+import { Theme } from "theme.slint";
 
 export component Radio inherits Rectangle {
     in property <string> text;
@@ -21,7 +22,7 @@ export component Radio inherits Rectangle {
                 height: 16px;
                 border-radius: 8px;
                 border-width: 1px;
-                border-color: root.enabled ? Palette.foreground : #8888;
+                border-color: root.enabled ? Palette.foreground : Theme.disabled;
                 Rectangle {
                     width: 8px;
                     height: 8px;
@@ -33,7 +34,7 @@ export component Radio inherits Rectangle {
         Text {
             text: root.text;
             vertical-alignment: center;
-            color: root.enabled ? Palette.foreground : #8888;
+            color: root.enabled ? Palette.foreground : Theme.disabled;
         }
     }
     keys := SpaceActivate {
