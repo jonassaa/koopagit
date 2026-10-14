@@ -1,6 +1,6 @@
 //! `/command:settings [/page:<id>]` — the TortoiseGit settings dialog (`CSettings`).
 
-mod editor;
+use crate::editor;
 pub mod pages;
 
 use std::cell::RefCell;

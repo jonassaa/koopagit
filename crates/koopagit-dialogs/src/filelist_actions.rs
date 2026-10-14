@@ -941,10 +941,11 @@ impl FileListMenu {
                         Repo::discover(&env.workdir)?.extract_blob(cv, &first.entry.path)?
                     }
                 };
-                if action == A::OpenWith {
-                    open_with(&file);
-                } else {
-                    open_path(&file);
+                // `CGitStatusListCtrl::OpenFile` (GitStatusListCtrl.cpp:4673).
+                match action {
+                    A::OpenWith => open_with(&file),
+                    A::ViewRev => crate::editor::launch(&file)?,
+                    _ => open_path(&file),
                 }
             }
             A::Explore => explore_to(&first_full),
