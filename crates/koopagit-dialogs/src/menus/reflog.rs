@@ -1,7 +1,7 @@
 //! RefLog / Stash List row menu (`CRefLogList`: the log-list menu with the
 //! reflog mask; spec-menus.md §4.1 and §2.2).
 
-use super::{Entry, Leaf, Menu, leaf};
+use super::{ActionId, Entry, Leaf, Menu, leaf};
 
 menu_actions! {
     pub enum ReflogAction {
@@ -52,6 +52,39 @@ pub struct ReflogMenuInput {
     /// Short hashes of the first and last selected entries (for the range labels).
     pub first_short: String,
     pub last_short: String,
+    /// `Parent %d: ...` labels of the single selected commit; a merge gets
+    /// "Parent N" submenus like the Log (`menus::log::parent_label`).
+    pub parent_labels: Vec<String>,
+}
+
+/// Encodes a parent / sub-entry index (`ID | (k << 16)`, as in the Log).
+pub fn sub_id(action: ReflogAction, k: u32) -> i32 {
+    action.id() | ((k as i32) << 16)
+}
+
+/// Decodes a menu id into the action and sub-entry index.
+pub fn decode(id: i32) -> Option<(ReflogAction, u32)> {
+    ReflogAction::from_id(id & 0xFFFF).map(|a| (a, (id as u32) >> 16))
+}
+
+fn leaf_id(id: i32, title: &str) -> Leaf {
+    Leaf {
+        id,
+        title: title.into(),
+        enabled: true,
+    }
+}
+
+fn parents_sub(action: ReflogAction, labels: &[String]) -> Vec<Leaf> {
+    labels
+        .iter()
+        .enumerate()
+        .map(|(k, l)| Leaf {
+            id: sub_id(action, k as u32 + 1),
+            title: l.clone(),
+            enabled: true,
+        })
+        .collect()
 }
 
 pub fn build(i: &ReflogMenuInput) -> Vec<Entry> {
@@ -65,8 +98,32 @@ pub fn build(i: &ReflogMenuInput) -> Vec<Entry> {
             A::CompareWithWorkingTree,
             "Compare with &working tree",
         );
-        m.item_if(i.has_wc, A::UnifiedDiff, "Show changes as &unified diff");
-        m.item(A::CompareWithPrevious, "&Compare with previous revision");
+        let merge = i.parent_labels.len() > 1;
+        if i.has_wc {
+            if merge {
+                use crate::log_menu::{ALL_PARENTS, EXTRA_AFTER_MERGE, ONLY_MERGED};
+                let mut children = vec![
+                    leaf_id(sub_id(A::UnifiedDiff, ALL_PARENTS), "All Parents"),
+                    leaf_id(sub_id(A::UnifiedDiff, ONLY_MERGED), "Only Merged Files"),
+                    leaf_id(
+                        sub_id(A::UnifiedDiff, EXTRA_AFTER_MERGE),
+                        "Show extra changes after merge",
+                    ),
+                ];
+                children.extend(parents_sub(A::UnifiedDiff, &i.parent_labels));
+                m.sub("&Unified diff with", children);
+            } else {
+                m.item(A::UnifiedDiff, "Show changes as &unified diff");
+            }
+        }
+        if merge {
+            m.sub(
+                "&Compare with previous revision",
+                parents_sub(A::CompareWithPrevious, &i.parent_labels),
+            );
+        } else {
+            m.item(A::CompareWithPrevious, "&Compare with previous revision");
+        }
         m.sep();
         // The reflog makes "Show log..." the default (first) item.
         m.item(A::ShowLog, "Show log...");
@@ -94,11 +151,16 @@ pub fn build(i: &ReflogMenuInput) -> Vec<Entry> {
             format!("Rebase \"{}\" onto this...(&G)", i.current_branch),
         );
         m.item(A::Export, "E&xport this version...");
-        m.item_if(
-            i.has_wc && !i.merge_active && !stash,
-            A::Revert,
-            "&Revert change by this commit",
-        );
+        if i.has_wc && !i.merge_active && !stash {
+            if merge {
+                m.sub(
+                    "&Revert change by this commit",
+                    parents_sub(A::Revert, &i.parent_labels),
+                );
+            } else {
+                m.item(A::Revert, "&Revert change by this commit");
+            }
+        }
         m.item_if(!stash, A::EditNotes, "Edit &Notes");
         m.sep();
     }
@@ -227,6 +289,40 @@ mod tests {
             last_short: "bbbb".into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn merge_rows_get_parent_submenus() {
+        let labels = vec![
+            "Parent 1: \"a\" (11111111)".to_owned(),
+            "Parent 2: \"b\" (22222222)".to_owned(),
+        ];
+        let e = build(&ReflogMenuInput {
+            parent_labels: labels.clone(),
+            ..input()
+        });
+        let t = titles(&e);
+        assert_eq!(
+            t[1..3],
+            ["[&Unified diff with]", "[&Compare with previous revision]"]
+        );
+        assert!(t.contains(&"[&Revert change by this commit]".to_owned()));
+        let Some(Entry::Sub { children, .. }) = e.iter().find(
+            |x| matches!(x, Entry::Sub { title, .. } if title == "&Compare with previous revision"),
+        ) else {
+            panic!("no compare submenu");
+        };
+        assert_eq!(children.len(), 2);
+        assert_eq!(
+            decode(children[1].id),
+            Some((ReflogAction::CompareWithPrevious, 2))
+        );
+        // One parent: plain entries.
+        let t = titles(&build(&ReflogMenuInput {
+            parent_labels: labels[..1].to_vec(),
+            ..input()
+        }));
+        assert_eq!(t[2], "Compare with previous revision");
     }
 
     #[test]
