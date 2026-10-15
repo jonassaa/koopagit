@@ -1,0 +1,30 @@
+Windows Registry Editor Version 5.00
+
+; Removes what register.reg adds. Requires admin (HKLM). Restart Explorer afterwards.
+
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}]
+[-HKEY_CLASSES_ROOT\*\shellex\ContextMenuHandlers\koopagit]
+[-HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\koopagit]
+[-HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\koopagit]
+[-HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\koopagit]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f01-6b4c-4d1f-9a2e-7c0d3b1e4a01}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit1Conflict]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f02-6b4c-4d1f-9a2e-7c0d3b1e4a02}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit2Modified]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f03-6b4c-4d1f-9a2e-7c0d3b1e4a03}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit3Deleted]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f04-6b4c-4d1f-9a2e-7c0d3b1e4a04}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit4ReadOnly]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f05-6b4c-4d1f-9a2e-7c0d3b1e4a05}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit5Locked]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f06-6b4c-4d1f-9a2e-7c0d3b1e4a06}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit6Added]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f07-6b4c-4d1f-9a2e-7c0d3b1e4a07}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit7Normal]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f08-6b4c-4d1f-9a2e-7c0d3b1e4a08}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit8Ignored]
+[-HKEY_CLASSES_ROOT\CLSID\{5e1a8f09-6b4c-4d1f-9a2e-7c0d3b1e4a09}]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\  koopagit9Unversioned]
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved]
+"{5e1a8f00-6b4c-4d1f-9a2e-7c0d3b1e4a00}"=-

@@ -23,7 +23,7 @@ icons\<Name>Icon.ico     Conflict, Modified, Deleted, ReadOnly, Locked, Added, N
 
 Edit the DLL path in `register.reg`, import it as administrator, then restart
 Explorer. The CLSIDs are KoopaGit's own (`{5e1a8f0X-...}`), so it can coexist
-with TortoiseGit.
+with TortoiseGit. `unregister.reg` removes the same keys.
 
 ## Behaviour
 
