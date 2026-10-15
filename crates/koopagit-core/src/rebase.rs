@@ -277,7 +277,7 @@ impl Sequencer {
     }
 
     fn git_logged(&mut self, repo: &Repo, args: &[String]) -> Result<crate::git_cli::GitOutput> {
-        self.log.push(format!("git {}", args.join(" ")));
+        self.log.push(repo.git().command_line(args));
         let out = repo.git().output(args)?;
         if !out.stdout.trim().is_empty() {
             self.log.push(out.stdout.trim_end().to_owned());

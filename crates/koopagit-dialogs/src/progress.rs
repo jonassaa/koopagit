@@ -325,7 +325,7 @@ fn run_commands(
             .lock()
             .unwrap()
             .out
-            .push_line(&format!("git {}", args.join(" ")));
+            .push_line(&job.git.command_line(args));
         refresh(shared);
         let started = std::time::Instant::now();
         let mut cmd = job.git.command(args);
