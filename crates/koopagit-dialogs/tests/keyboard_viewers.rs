@@ -105,6 +105,26 @@ fn merge_scroll_keys_move_the_view() {
     assert_eq!(dlg.get_scroll_y(), 0.0);
 }
 
+/// Ctrl+End lands on the very bottom whatever the view height, not on the
+/// row boundary Slint's ListView snaps long jumps to.
+#[test]
+fn merge_end_reaches_the_bottom_at_any_height() {
+    init();
+    let dlg = DiffViewer::new().unwrap();
+    let rows: Vec<DiffRow> = (0..500).map(|_| DiffRow::default()).collect();
+    dlg.set_rows(ModelRc::new(VecModel::from(rows)));
+    dlg.show().unwrap();
+    let w = dlg.window();
+    for height in 700..718 {
+        w.set_size(slint::LogicalSize::new(1100.0, height as f32));
+        press(w, K::Home);
+        ctrl(w, K::End);
+        let bottom = dlg.get_scroll_y();
+        press(w, K::DownArrow);
+        assert_eq!(dlg.get_scroll_y(), bottom, "window height {height}");
+    }
+}
+
 #[test]
 fn conflict_editor_navigation_and_block_keys() {
     init();
