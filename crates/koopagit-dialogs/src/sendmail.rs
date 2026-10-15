@@ -258,12 +258,8 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         req.combine.then_some(req.subject.as_str()),
         &req.patches,
     );
-    let extra = smtp_args(&ctx.settings);
-    // Insert server options before the `--` separator.
-    let sep = args.iter().position(|a| a == "--").unwrap_or(args.len());
-    for (i, a) in extra.into_iter().enumerate() {
-        args.insert(sep + i, a);
-    }
+    // Server options go right after `send-email`, ahead of the patch files.
+    args.splice(1..1, smtp_args(&ctx.settings));
     if req.attachment {
         args.insert(1, "--attach".to_owned());
     }

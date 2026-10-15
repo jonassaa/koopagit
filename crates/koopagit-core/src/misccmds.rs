@@ -167,8 +167,16 @@ pub fn send_email_args(
         a.push("--compose".to_owned());
         a.push(format!("--subject={sub}"));
     }
-    a.push(s("--"));
-    a.extend(patches.iter().map(|p| p.to_string_lossy().into_owned()));
+    // No `--`: send-email hands everything after it to `git format-patch` as revisions,
+    // so the patch files would not be sent. A `./` prefix keeps a `-` file from being an option.
+    a.extend(patches.iter().map(|p| {
+        let p = p.to_string_lossy();
+        if p.starts_with('-') {
+            format!("./{p}")
+        } else {
+            p.into_owned()
+        }
+    }));
     a
 }
 
@@ -322,11 +330,11 @@ mod tests {
             &["a@b".into()],
             &[],
             None,
-            &[PathBuf::from("/p/0001.patch")],
+            &[PathBuf::from("/p/0001.patch"), PathBuf::from("-x.patch")],
         );
         assert_eq!(
             a.join(" "),
-            "send-email --confirm=never --to=a@b -- /p/0001.patch"
+            "send-email --confirm=never --to=a@b /p/0001.patch ./-x.patch"
         );
     }
 
