@@ -30,7 +30,11 @@ pub struct GraphRow {
 }
 
 /// Assigns lanes for commits listed child-before-parent (as the log shows
-/// them), like TortoiseGit's `lanes.cpp` in its simplest form.
+/// them), like TortoiseGit's `lanes.cpp`: a line of history keeps its lane
+/// until it reaches the commit it waits for, so lanes never shift sideways.
+/// Every lane waiting for a commit converges into its node (the leftmost such
+/// lane); the first parent continues in the node's lane, other parents join a
+/// lane already waiting for them or open a new one.
 pub fn graph<'a>(commits: impl IntoIterator<Item = (&'a str, &'a [String])>) -> Vec<GraphRow> {
     let mut active: Vec<Option<String>> = Vec::new();
     let mut rows = Vec::new();
@@ -46,50 +50,34 @@ pub fn graph<'a>(commits: impl IntoIterator<Item = (&'a str, &'a [String])>) -> 
             },
         };
         let mut lines = Vec::new();
-        // Upper half: every active lane continues; lanes waiting for this
-        // commit converge into the node.
-        for (i, lane) in active.iter().enumerate() {
-            match lane.as_deref() {
-                Some(l) if l == id => lines.push(GraphLine {
-                    from: i,
-                    to: col,
-                    upper: true,
-                }),
-                Some(_) => lines.push(GraphLine {
+        // Upper half: lanes waiting for this commit converge into the node,
+        // every other lane passes straight through.
+        for (i, lane) in active.iter_mut().enumerate() {
+            let Some(l) = lane.as_deref() else { continue };
+            let waits = l == id;
+            lines.push(GraphLine {
+                from: i,
+                to: if waits { col } else { i },
+                upper: true,
+            });
+            if waits {
+                *lane = None;
+            } else {
+                lines.push(GraphLine {
                     from: i,
                     to: i,
-                    upper: true,
-                }),
-                None => {}
-            }
-        }
-        for lane in active.iter_mut() {
-            if lane.as_deref() == Some(id) {
-                *lane = None;
-            }
-        }
-        // Lower half: the first parent continues in the node's lane, other
-        // parents join an existing lane or open a new one.
-        let mut parent_lanes = Vec::new();
-        for (n, p) in parents.iter().enumerate() {
-            let waiting = active.iter().position(|l| l.as_ref() == Some(p));
-            let pull_back = waiting.filter(|&w| n == 0 && w > col);
-            let lane = if let Some(existing) = pull_back {
-                // The first parent already waits further right: pull that lane
-                // back into this commit's lane so the main line stays straight.
-                active[existing] = None;
-                active[col] = Some(p.clone());
-                lines.push(GraphLine {
-                    from: existing,
-                    to: col,
                     upper: false,
                 });
-                col
-            } else if let Some(existing) = waiting {
-                existing
-            } else if n == 0 {
+            }
+        }
+        // Lower half: lines from the node to each parent's lane.
+        let mut parent_lanes: Vec<usize> = Vec::new();
+        for (n, p) in parents.iter().enumerate() {
+            let lane = if n == 0 {
                 active[col] = Some(p.clone());
                 col
+            } else if let Some(waiting) = active.iter().position(|l| l.as_ref() == Some(p)) {
+                waiting
             } else if let Some(free) = active.iter().position(Option::is_none) {
                 active[free] = Some(p.clone());
                 free
@@ -97,23 +85,14 @@ pub fn graph<'a>(commits: impl IntoIterator<Item = (&'a str, &'a [String])>) -> 
                 active.push(Some(p.clone()));
                 active.len() - 1
             };
-            parent_lanes.push(lane);
-        }
-        for (i, lane) in active.iter().enumerate() {
-            if lane.is_some() && !parent_lanes.contains(&i) {
+            if !parent_lanes.contains(&lane) {
+                parent_lanes.push(lane);
                 lines.push(GraphLine {
-                    from: i,
-                    to: i,
+                    from: col,
+                    to: lane,
                     upper: false,
                 });
             }
-        }
-        for lane in parent_lanes {
-            lines.push(GraphLine {
-                from: col,
-                to: lane,
-                upper: false,
-            });
         }
         let width = active.len().max(col + 1);
         while active.last().is_some_and(Option::is_none) {
@@ -592,6 +571,7 @@ mod tests {
             ("s", s.as_slice()),
             ("a", &[][..]),
         ]);
+        assert_coherent(&rows);
         assert_eq!(rows[0].node, 0);
         assert!(rows[0].lines.contains(&GraphLine {
             from: 0,
@@ -599,20 +579,27 @@ mod tests {
             upper: false
         }));
         assert_eq!(rows[1].node, 0);
+        // s keeps its own lane down to "a" instead of jumping across.
         assert_eq!(rows[2].node, 1);
-        // s's parent "a" already waits in lane 0, so s joins it.
         assert!(rows[2].lines.contains(&GraphLine {
             from: 1,
-            to: 0,
+            to: 1,
             upper: false
         }));
+        // Both lanes converge into "a".
         assert_eq!(rows[3].node, 0);
-        assert_eq!(rows[3].width, 1);
+        assert!(rows[3].lines.contains(&GraphLine {
+            from: 1,
+            to: 0,
+            upper: true
+        }));
+        assert_eq!(rows[3].width, 2);
     }
 
     #[test]
-    fn first_parent_pulls_side_lane_back() {
-        // Topo order m, f2, f1, c, a: the side branch reaches `a` first.
+    fn lanes_never_shift_sideways() {
+        // Topo order m, f2, f1, c, a: the side branch reaches `a` first, yet
+        // the first parent stays in the node's lane and both meet at `a`.
         let m = ids(&["c", "f2"]);
         let f2 = ids(&["f1"]);
         let f1 = ids(&["a"]);
@@ -624,15 +611,89 @@ mod tests {
             ("c", c.as_slice()),
             ("a", &[][..]),
         ]);
+        assert_coherent(&rows);
         assert_eq!(rows[2].node, 1);
         assert_eq!(rows[3].node, 0);
-        assert!(rows[3].lines.contains(&GraphLine {
+        assert_eq!(rows[4].node, 0);
+        assert!(rows[4].lines.contains(&GraphLine {
             from: 1,
             to: 0,
-            upper: false
+            upper: true
         }));
-        assert_eq!(rows[4].node, 0);
-        assert_eq!(rows[4].width, 1);
+    }
+
+    #[test]
+    fn all_branches_graph_is_coherent() {
+        // Unmerged tips forking from main, a merge into a side branch, a merge
+        // whose second parent another lane already waits for, and two roots.
+        let list: &[(&str, &[&str])] = &[
+            ("m5", &["m4"]),
+            ("t", &["x2"]),
+            ("m4", &["mf"]),
+            ("mf", &["m3", "a3"]),
+            ("a3", &["a2"]),
+            ("a2", &["a1"]),
+            ("a1", &["m1"]),
+            ("m3", &["m2"]),
+            ("c2", &["cm"]),
+            ("cm", &["c1", "h1"]),
+            ("h1", &["m2"]),
+            ("c1", &["m2"]),
+            ("b2", &["b1"]),
+            ("j", &["b1", "m2"]),
+            ("b1", &["m2"]),
+            ("m2", &["m1"]),
+            ("x2", &["x1"]),
+            ("m1", &["init"]),
+            ("init", &[]),
+            ("x1", &[]),
+        ];
+        let parents: Vec<Vec<String>> = list.iter().map(|(_, p)| ids(p)).collect();
+        let rows = graph(
+            list.iter()
+                .zip(&parents)
+                .map(|((id, _), p)| (*id, p.as_slice())),
+        );
+        assert_coherent(&rows);
+        // The unrelated tip keeps one lane all the way to its root.
+        assert_eq!(rows[1].node, 1);
+        assert_eq!(rows[16].node, 1);
+        assert_eq!(rows[19].node, 1);
+        // The lanes of m3, h1, c1 and b1 converge into m2; j's merge line
+        // joined one of them rather than opening another.
+        let into_m2 = rows[15].lines.iter().filter(|l| l.upper && l.to == 0);
+        assert_eq!(into_m2.count(), 4);
+    }
+
+    /// Lines are continuous: every lane leaving a row's bottom enters the next
+    /// row's top, and inside a row each line ends at the node or carries on.
+    fn assert_coherent(rows: &[GraphRow]) {
+        use std::collections::BTreeSet;
+        let edges = |r: &GraphRow, upper: bool| -> BTreeSet<usize> {
+            r.lines
+                .iter()
+                .filter(|l| l.upper == upper)
+                .map(|l| if upper { l.from } else { l.to })
+                .collect()
+        };
+        for (n, r) in rows.iter().enumerate() {
+            let (top, bottom) = (edges(r, true), edges(r, false));
+            for l in &r.lines {
+                assert!(
+                    l.from < r.width && l.to < r.width,
+                    "row {n}: {l:?} too wide"
+                );
+                let inner = if l.upper { l.to } else { l.from };
+                if inner != r.node {
+                    assert_eq!(l.from, l.to, "row {n}: {l:?} shifts sideways");
+                    let other = if l.upper { &bottom } else { &top };
+                    assert!(other.contains(&l.from), "row {n}: {l:?} stops mid-row");
+                }
+            }
+            if let Some(next) = rows.get(n + 1) {
+                assert_eq!(bottom, edges(next, true), "rows {n} and {} differ", n + 1);
+            }
+        }
     }
 
     fn entry(subject: &str) -> LogEntry {
