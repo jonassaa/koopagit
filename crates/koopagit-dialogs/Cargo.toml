@@ -20,6 +20,13 @@ trash = "5.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 slint = { version = "1.18", features = ["unstable-winit-030"] }
 
+# Not used directly: caps the zbus Slint uses. Slint 1.18.1 treats a missing D-Bus
+# session bus (WSLg, bare compositors) as normal only for zbus < 5.19's error variants;
+# 5.19's new `Error::Connection` makes every launch print "Error watching for xdg
+# desktop settings: Failed to connect to address ...". Drop once Slint matches it.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { version = ">=5, <5.19", default-features = false }
+
 [dev-dependencies]
 i-slint-backend-testing = "1.18"
 i-slint-common = "1.18"
