@@ -33,6 +33,9 @@ global ViewerKeys {
         k == Key.UpArrow || k == Key.DownArrow || k == Key.PageUp || k == Key.PageDown
             || k == Key.Home || k == Key.End || k == "Ctrl+" + Key.Home || k == "Ctrl+" + Key.End
     }
+    public pure function ends(k: string) -> bool {
+        k == Key.End || k == "Ctrl+" + Key.End
+    }
     // New content-y of a scroll view for a key that `scrolls`.
     public pure function scrolled(k: string, y: length, visible: length, content: length) -> length {
         max(min(0px, visible - content), min(0px,
@@ -127,6 +130,14 @@ export component DiffViewer inherits KoopaWindow {
             if (ViewerKeys.scrolls(ViewerKeys.chord(e))) {
                 list.content-y = ViewerKeys.scrolled(ViewerKeys.chord(e), list.content-y, list.visible-height, list.content-height);
                 return accept;
+            }
+            reject
+        }
+        // ListView snaps a long jump to a row boundary once laid out; on
+        // release it has, so jump again to land on the exact end.
+        key-released(e) => {
+            if (ViewerKeys.ends(ViewerKeys.chord(e))) {
+                list.content-y = ViewerKeys.scrolled(Key.End, list.content-y, list.visible-height, list.content-height);
             }
             reject
         }
@@ -276,6 +287,14 @@ export component ConflictViewer inherits KoopaWindow {
             }
             reject
         }
+        // ListView snaps a long jump to a row boundary once laid out; on
+        // release it has, so jump again to land on the exact end.
+        key-released(e) => {
+            if (ViewerKeys.ends(ViewerKeys.chord(e))) {
+                list.content-y = ViewerKeys.scrolled(Key.End, list.content-y, list.visible-height, list.content-height);
+            }
+            reject
+        }
 
         VerticalBox {
             HorizontalBox {
@@ -383,6 +402,14 @@ export component UDiffViewer inherits KoopaWindow {
             if (ViewerKeys.scrolls(ViewerKeys.chord(e))) {
                 list.content-y = ViewerKeys.scrolled(ViewerKeys.chord(e), list.content-y, list.visible-height, list.content-height);
                 return accept;
+            }
+            reject
+        }
+        // ListView snaps a long jump to a row boundary once laid out; on
+        // release it has, so jump again to land on the exact end.
+        key-released(e) => {
+            if (ViewerKeys.ends(ViewerKeys.chord(e))) {
+                list.content-y = ViewerKeys.scrolled(Key.End, list.content-y, list.visible-height, list.content-height);
             }
             reject
         }

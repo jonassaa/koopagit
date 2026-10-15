@@ -386,7 +386,10 @@ mod tests {
         if std::env::var_os("KOOPAGIT_REGEN_DYNMENU").is_some() {
             std::fs::write(path, &expected).unwrap();
         }
-        let actual = std::fs::read_to_string(path).unwrap_or_default();
+        // A Windows checkout with core.autocrlf has CRLF line endings.
+        let actual = std::fs::read_to_string(path)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
         assert!(
             actual == expected,
             "koopagit-ui/ui/dynmenu.slint is stale; rerun with KOOPAGIT_REGEN_DYNMENU=1"
