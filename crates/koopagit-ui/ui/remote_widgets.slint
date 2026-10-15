@@ -3,6 +3,7 @@
 // (CMenuButton).
 import { LineEdit, Button, Palette } from "std-widgets.slint";
 import { SpaceActivate } from "keys.slint";
+import { Theme } from "theme.slint";
 
 // CHistoryCombo: Enter with the drop-down closed passes to the dialog (wire
 // `accepted` to the default button) unless `want-return` is set; with it open,
@@ -87,9 +88,10 @@ export component EditCombo inherits FocusScope {
                 reject
             }
             Rectangle {
-                background: Palette.background;
+                background: Theme.popup-bg;
                 border-width: 1px;
-                border-color: #888;
+                border-color: Theme.border-strong;
+                border-radius: Theme.modern ? 8px : 0px;
                 VerticalLayout {
                     padding: 2px;
                     for item[i] in root.items: Rectangle {
@@ -135,7 +137,7 @@ export component TriCheck inherits Rectangle {
             y: (parent.height - self.height) / 2;
             border-width: 1px;
             border-radius: 3px;
-            border-color: root.enabled ? Palette.foreground.transparentize(0.4) : #8886;
+            border-color: root.enabled ? Palette.foreground.transparentize(0.4) : Theme.border;
             background: root.state == 1 ? Palette.accent-background : transparent;
             Text {
                 text: root.state == 1 ? "✓" : "";
@@ -156,7 +158,7 @@ export component TriCheck inherits Rectangle {
         Text {
             text: root.text;
             vertical-alignment: center;
-            color: root.enabled ? Palette.foreground : #8888;
+            color: root.enabled ? Palette.foreground : Theme.disabled;
         }
     }
     focus-scope := SpaceActivate {
@@ -216,9 +218,10 @@ export component KeyMenu inherits PopupWindow {
             reject
         }
         Rectangle {
-            background: Palette.background;
+            background: Theme.popup-bg;
             border-width: 1px;
-            border-color: #888;
+            border-color: Theme.border-strong;
+            border-radius: Theme.modern ? 8px : 0px;
             VerticalLayout {
                 padding: 4px;
                 for label[i] in root.entries: Rectangle {

@@ -185,6 +185,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         .unwrap_or("HEAD")
         .to_owned();
     let dlg = RepoBrowserDialog::new()?;
+    crate::window::apply_theme(&dlg);
     dlg.set_dialog_title(ctx.window_title("Repository Browser").into());
     dlg.set_path_text(repo.workdir().to_string_lossy().as_ref().into());
     dlg.set_revision(rev.clone().into());
@@ -765,7 +766,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         }
     }
 
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(0)
 }

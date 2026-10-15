@@ -508,7 +508,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         dlg.on_push(move || c.push(false));
     }
 
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
 
     let mut st = state.borrow_mut();

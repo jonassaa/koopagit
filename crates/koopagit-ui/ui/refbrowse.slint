@@ -6,6 +6,8 @@ import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys } from "keys.slint";
+import { Theme } from "theme.slint";
+import { HeaderText, ListHeader, RowBackground } from "common.slint";
 
 export struct ReflogRow {
     sha: string,
@@ -41,11 +43,7 @@ export struct RefCheckRow {
     checked: bool,
 }
 
-component HeaderCell inherits Text {
-    font-weight: 600;
-    vertical-alignment: center;
-    overflow: elide;
-}
+component HeaderCell inherits HeaderText {}
 
 component Cell inherits Text {
     vertical-alignment: center;
@@ -61,8 +59,8 @@ component InputBar inherits Rectangle {
     callback cancelled();
     visible: root.label != "";
     height: root.label == "" ? 0px : layout.preferred-height;
-    background: #0366d622;
-    border-radius: 4px;
+    background: Theme.notice-bg;
+    border-radius: Theme.modern ? 6px : 4px;
     layout := HorizontalBox {
         Text { text: root.label; vertical-alignment: center; }
         edit := LineEdit {
@@ -134,11 +132,12 @@ export component RefLogDialog inherits KoopaWindow {
             Rectangle {
                 vertical-stretch: 1;
                 border-width: 1px;
-                border-color: #8886;
+                border-color: Theme.border;
+                border-radius: Theme.panel-radius;
+                background: Theme.surface;
+                clip: Theme.modern;
                 VerticalLayout {
-                    Rectangle {
-                        height: 22px;
-                        background: Colors.header-bg;
+                    ListHeader {
                         HorizontalLayout {
                             padding-left: 6px;
                             spacing: 6px;
@@ -151,8 +150,12 @@ export component RefLogDialog inherits KoopaWindow {
                     }
                     ListView {
                         for row[i] in root.rows: Rectangle {
-                            height: 22px;
-                            background: row.selected ? Colors.selection : transparent;
+                            height: Theme.row-height;
+                            RowBackground {
+                                width: parent.width;
+                                height: parent.height;
+                                selected: row.selected;
+                            }
                             DynMenuArea {
                                 blocks() => { return root.menu-for(i); }
                                 chosen(id) => { root.menu-action(i, id); }
@@ -287,11 +290,18 @@ export component BrowseRefsDialog inherits KoopaWindow {
                 Rectangle {
                     width: 220px;
                     border-width: 1px;
-                    border-color: #8886;
+                    border-color: Theme.border;
+                    border-radius: Theme.panel-radius;
+                    background: Theme.surface;
+                    clip: Theme.modern;
                     ListView {
                         for node[i] in root.tree: Rectangle {
-                            height: 22px;
-                            background: node.selected ? Colors.selection : transparent;
+                            height: Theme.row-height;
+                            RowBackground {
+                                width: parent.width;
+                                height: parent.height;
+                                selected: node.selected;
+                            }
                             DynMenuArea {
                                 blocks() => { return root.tree-menu-for(i); }
                                 chosen(id) => { root.tree-menu-action(i, id); }
@@ -324,11 +334,12 @@ export component BrowseRefsDialog inherits KoopaWindow {
                 Rectangle {
                     horizontal-stretch: 1;
                     border-width: 1px;
-                    border-color: #8886;
+                    border-color: Theme.border;
+                    border-radius: Theme.panel-radius;
+                    background: Theme.surface;
+                    clip: Theme.modern;
                     VerticalLayout {
-                        Rectangle {
-                            height: 22px;
-                            background: Colors.header-bg;
+                        ListHeader {
                             HorizontalLayout {
                                 padding-left: 6px;
                                 spacing: 6px;
@@ -343,8 +354,12 @@ export component BrowseRefsDialog inherits KoopaWindow {
                         }
                         ListView {
                             for row[i] in root.rows: Rectangle {
-                                height: 22px;
-                                background: row.selected ? Colors.selection : transparent;
+                                height: Theme.row-height;
+                                RowBackground {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    selected: row.selected;
+                                }
                                 DynMenuArea {
                                     blocks() => { return root.menu-for(i); }
                                     chosen(id) => { root.menu-action(i, id); }
@@ -437,7 +452,10 @@ export component DeleteRemoteTagDialog inherits KoopaWindow {
             Rectangle {
                 vertical-stretch: 1;
                 border-width: 1px;
-                border-color: #8886;
+                border-color: Theme.border;
+                border-radius: Theme.panel-radius;
+                background: Theme.surface;
+                clip: Theme.modern;
                 ListView {
                     for t[i] in root.tags: CheckBox {
                         height: 22px;

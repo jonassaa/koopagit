@@ -3,6 +3,7 @@
 import { Button, TextEdit, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { DialogKeys } from "keys.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
 
 export component ProgressDialog inherits KoopaWindow {
     in property <string> dialog-title: "Git command progress";
@@ -61,7 +62,7 @@ export component ProgressDialog inherits KoopaWindow {
             }
             Text {
                 text: root.status-text;
-                color: root.failed ? #c42b1c : #2e7d32;
+                color: root.failed ? Theme.failure : Theme.success;
             }
             HorizontalBox {
                 padding: 0;

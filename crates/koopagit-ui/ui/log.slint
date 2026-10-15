@@ -1,6 +1,7 @@
 // CLogDlg (IDD_LOGMESSAGE): caption "Log Messages".
 import { Button, CheckBox, ComboBox, LineEdit, TextEdit, ListView, ScrollView, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
-import { FileList, FileRow, Colors } from "common.slint";
+import { FileList, FileRow, Colors, ListHeader, HeaderText, RowBackground, Panel, PopupPanel } from "common.slint";
+import { Theme } from "theme.slint";
 import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
@@ -13,7 +14,7 @@ export struct RefChip {
 }
 
 // The lines of one graph row drawn in one lane colour: SVG path commands in
-// px (lane width 16, row height 22) and the index into the lane colours.
+// px (lane width 16, row height `Theme.row-height`) and the index into the lane colours.
 export struct GraphPath {
     commands: string,
     color: int,
@@ -38,27 +39,20 @@ export struct LogRow {
 
 component Chip inherits Rectangle {
     in property <RefChip> chip;
-    height: 16px;
-    width: label.preferred-width + 8px;
-    border-radius: 3px;
-    border-width: chip.kind == 0 ? 2px : 1px;
-    border-color: #0006;
-    background: chip.kind == 0 || chip.kind == 1 ? #ff8c42 : chip.kind == 2 ? #f0e442
-        : chip.kind == 3 ? #fcdc3c : chip.kind == 4 ? #b0b0b0 : #c8c8ff;
+    height: Theme.chip-height;
+    width: label.preferred-width + (Theme.modern ? 14px : 8px);
+    border-radius: Theme.chip-radius;
+    border-width: chip.kind == 0 && !Theme.modern ? 2px : 1px;
+    border-color: Theme.chip-border(chip.kind);
+    background: Theme.chip-bg(chip.kind);
     label := Text {
         text: chip.name;
-        color: black;
+        color: Theme.chip-fg(chip.kind);
         font-size: 11px;
-        font-weight: chip.kind == 0 ? 700 : 400;
+        font-weight: chip.kind == 0 ? 700 : Theme.modern ? 600 : 400;
         vertical-alignment: center;
         horizontal-alignment: center;
     }
-}
-
-component HeaderCell inherits Text {
-    font-weight: 600;
-    vertical-alignment: center;
-    overflow: elide;
 }
 
 component Cell inherits Text {
@@ -66,11 +60,6 @@ component Cell inherits Text {
     overflow: elide;
 }
 
-component Popup inherits Rectangle {
-    background: Palette.background;
-    border-width: 1px;
-    border-color: #888;
-}
 
 export component LogDialog inherits KoopaWindow {
     in property <string> dialog-title: "Log Messages - KoopaGit";
@@ -119,6 +108,9 @@ export component LogDialog inherits KoopaWindow {
     in property <length> graph-line-width: 2px;
     in property <length> graph-node-size: 10px;
     in property <length> graph-width: 64px;
+    // The Colors 3 branch-line colours are all at their defaults: the modern
+    // theme then draws its own lane palette.
+    in property <bool> lane-colors-default: true;
 
     callback refresh();
     callback filter-changed();
@@ -163,9 +155,12 @@ export component LogDialog inherits KoopaWindow {
     forward-focus: log-list;
 
     property <length> lane-width: 16px;
-    property <length> row-height: 22px;
+    property <length> row-height: Theme.row-height;
 
     pure function lane-color(i: int) -> color {
+        if (Theme.modern && root.lane-colors-default) {
+            return Theme.dark ? Theme.lanes-dark[i] : Theme.lanes-light[i];
+        }
         return Palette.color-scheme == ColorScheme.dark ? root.lane-colors-dark[i] : root.lane-colors[i];
     }
 
@@ -233,7 +228,7 @@ export component LogDialog inherits KoopaWindow {
                         text: root.ref-label;
                         vertical-alignment: center;
                         font-weight: 600;
-                        color: #0366d6;
+                        color: Theme.link;
                         TouchArea {
                             mouse-cursor: pointer;
                             clicked => { root.browse-refs(); }
@@ -301,10 +296,8 @@ export component LogDialog inherits KoopaWindow {
                 Rectangle { horizontal-stretch: 1; }
             }
             // Revision list
-            Rectangle {
+            Panel {
                 vertical-stretch: 3;
-                border-width: 1px;
-                border-color: #8886;
                 // The log list's own keys (CGitLogListBase); a row click focuses it.
                 log-list := FocusScope {
                     key-pressed(e) => {
@@ -326,29 +319,33 @@ export component LogDialog inherits KoopaWindow {
                     }
                 }
                 VerticalLayout {
-                    Rectangle {
-                        height: 22px;
-                        background: Colors.header-bg;
+                    ListHeader {
                         HorizontalLayout {
-                            padding-left: 6px;
+                            padding-left: 6px + Theme.row-inset;
+                            padding-right: Theme.row-inset;
                             spacing: 6px;
-                            HeaderCell { text: "Graph"; width: root.graph-width; }
-                            if root.show-sha: HeaderCell { text: "SHA-1"; width: 80px; }
-                            HeaderCell { text: "Message"; horizontal-stretch: 1; }
-                            HeaderCell { text: "Author"; width: 140px; }
-                            HeaderCell { text: "Date"; width: 130px; }
+                            HeaderText { text: "Graph"; width: root.graph-width; }
+                            if root.show-sha: HeaderText { text: "SHA-1"; width: 80px; }
+                            HeaderText { text: "Message"; horizontal-stretch: 1; }
+                            HeaderText { text: "Author"; width: 140px; }
+                            HeaderText { text: "Date"; width: 130px; }
                         }
                     }
                     ListView {
                         for row[i] in root.rows: Rectangle {
                             height: root.row-height;
-                            background: row.selected ? Colors.selection : transparent;
-                            border-width: i == root.current-row ? 1px : 0px;
-                            border-color: #0366d688;
+                            RowBackground {
+                                width: parent.width;
+                                height: parent.height;
+                                selected: row.selected;
+                                hover: row-touch.has-hover;
+                                // The modern theme outlines the current row only while the list has focus.
+                                current: i == root.current-row && (!Theme.modern || log-list.has-focus);
+                            }
                             DynMenuArea {
                                 blocks() => { return root.row-menu(i); }
                                 chosen(id) => { root.menu-action(i, id); }
-                                TouchArea {
+                                row-touch := TouchArea {
                                     double-clicked => { root.row-activated(i); }
                                     pointer-event(e) => {
                                         if (e.button == PointerEventButton.left && e.kind == PointerEventKind.down) {
@@ -362,7 +359,8 @@ export component LogDialog inherits KoopaWindow {
                                 }
                             }
                             HorizontalLayout {
-                                padding-left: 6px;
+                                padding-left: 6px + Theme.row-inset;
+                                padding-right: Theme.row-inset;
                                 spacing: 6px;
                                 Rectangle {
                                     width: root.graph-width;
@@ -377,12 +375,12 @@ export component LogDialog inherits KoopaWindow {
                                         viewbox-x: 0;
                                         viewbox-y: 0;
                                         viewbox-width: max(1, row.lanes) * 16;
-                                        viewbox-height: 22;
+                                        viewbox-height: root.row-height / 1px;
                                         commands: p.commands;
                                         stroke: root.lane-color(p.color);
                                         stroke-width: root.graph-line-width;
                                     }
-                                    Rectangle {
+                                    if !Theme.modern: Rectangle {
                                         x: row.node * root.lane-width + (root.lane-width - self.width) / 2;
                                         y: (root.row-height - self.height) / 2;
                                         width: row.wc ? 8px : root.graph-node-size;
@@ -390,8 +388,22 @@ export component LogDialog inherits KoopaWindow {
                                         border-radius: row.wc || row.merge ? 0px : self.width / 2;
                                         background: row.wc ? #d73a49 : root.lane-color(mod(row.node, 8));
                                     }
+                                    // Modern nodes: a ring in the list surface cuts the lines; merges
+                                    // and the working tree are hollow, HEAD is drawn larger.
+                                    if Theme.modern: Rectangle {
+                                        x: row.node * root.lane-width + (root.lane-width - self.width) / 2;
+                                        y: (root.row-height - self.height) / 2;
+                                        width: row.is-head ? root.graph-node-size + 6px
+                                            : row.merge || row.wc ? root.graph-node-size : root.graph-node-size + 4px;
+                                        height: self.width;
+                                        border-radius: self.width / 2;
+                                        border-width: 2px;
+                                        border-color: row.wc ? Theme.disabled
+                                            : row.merge && !row.is-head ? root.lane-color(mod(row.node, 8)) : Theme.surface;
+                                        background: row.wc || (row.merge && !row.is-head) ? Theme.surface : root.lane-color(mod(row.node, 8));
+                                    }
                                 }
-                                if root.show-sha: Cell { text: row.sha; width: 80px; font-family: "monospace"; }
+                                if root.show-sha: Cell { text: row.sha; width: 80px; font-family: "monospace"; color: Theme.modern ? Theme.muted : Palette.foreground; }
                                 HorizontalLayout {
                                     horizontal-stretch: 1;
                                     spacing: 4px;
@@ -402,22 +414,21 @@ export component LogDialog inherits KoopaWindow {
                                     }
                                     Cell {
                                         text: row.message;
-                                        font-weight: row.is-head ? 700 : 400;
+                                        font-weight: row.is-head ? (Theme.modern ? 600 : 700) : 400;
                                         font-italic: row.wc;
+                                        color: row.wc && Theme.modern ? Theme.muted : Palette.foreground;
                                     }
                                 }
                                 Cell { text: row.author; width: 140px; }
-                                Cell { text: row.date; width: 130px; }
+                                Cell { text: row.date; width: 130px; color: Theme.modern ? Theme.muted : Palette.foreground; }
                             }
                         }
                     }
                 }
             }
             // Message pane: selectable text with Copy / Copy all / Edit Notes.
-            Rectangle {
+            Panel {
                 vertical-stretch: 1;
-                border-width: 1px;
-                border-color: #8886;
                 DynMenuArea {
                     blocks() => {
                         return root.message-menu(msg-input.anchor-position-byte-offset != msg-input.cursor-position-byte-offset);
@@ -430,12 +441,14 @@ export component LogDialog inherits KoopaWindow {
                         }
                     }
                     ScrollView {
-                        content-height: max(self.visible-height, msg-input.preferred-height + 8px);
+                        content-height: max(self.visible-height, msg-input.preferred-height + 2 * self.pad-y);
                         content-width: self.visible-width;
+                        property <length> pad-x: Theme.modern ? 12px : 6px;
+                        property <length> pad-y: Theme.modern ? 10px : 4px;
                         msg-input := TextInput {
-                            x: 6px;
-                            y: 4px;
-                            width: parent.visible-width - 12px;
+                            x: parent.pad-x;
+                            y: parent.pad-y;
+                            width: parent.visible-width - 2 * parent.pad-x;
                             text: root.details;
                             read-only: true;
                             single-line: false;
@@ -490,7 +503,7 @@ export component LogDialog inherits KoopaWindow {
                     clicked => { walk-popup.show(); }
                 }
                 Button { text: "View"; clicked => { view-popup.show(); } }
-                Button { text: "OK"; clicked => { root.ok(); } }
+                Button { text: "OK"; primary: Theme.modern; clicked => { root.ok(); } }
             }
         }
     }
@@ -499,7 +512,7 @@ export component LogDialog inherits KoopaWindow {
         x: root.width - 240px;
         y: 44px;
         close-policy: close-on-click-outside;
-        Popup {
+        PopupPanel {
             VerticalBox {
                 CheckBox { text: "Subject"; checked <=> root.filter-subject; toggled => { root.filter-changed(); } }
                 CheckBox { text: "Messages"; checked <=> root.filter-messages; toggled => { root.filter-changed(); } }
@@ -509,7 +522,7 @@ export component LogDialog inherits KoopaWindow {
                 CheckBox { text: "SHA-1"; checked <=> root.filter-sha; toggled => { root.filter-changed(); } }
                 CheckBox { text: "Refname"; checked <=> root.filter-refs; toggled => { root.filter-changed(); } }
                 CheckBox { text: "Notes"; checked <=> root.filter-notes; toggled => { root.filter-changed(); } }
-                Rectangle { height: 1px; background: #8886; }
+                Rectangle { height: 1px; background: Theme.border; }
                 CheckBox { text: "Use regular expression"; checked <=> root.filter-regex; toggled => { root.filter-changed(); } }
                 CheckBox { text: "Case-sensitive"; checked <=> root.filter-case; toggled => { root.filter-changed(); } }
             }
@@ -519,7 +532,7 @@ export component LogDialog inherits KoopaWindow {
         x: root.width - 400px;
         y: root.height - 120px;
         close-policy: close-on-click-outside;
-        Popup {
+        PopupPanel {
             VerticalBox {
                 CheckBox { text: "First Parent"; checked <=> root.first-parent; toggled => { root.refresh(); } }
                 CheckBox { text: "No merges"; checked <=> root.no-merges; toggled => { root.refresh(); } }
@@ -530,7 +543,7 @@ export component LogDialog inherits KoopaWindow {
         x: root.width - 240px;
         y: root.height - 210px;
         close-policy: close-on-click-outside;
-        Popup {
+        PopupPanel {
             VerticalBox {
                 CheckBox { text: "Show SHA-1 column"; checked <=> root.show-sha; }
                 Text { text: "Labels"; font-weight: 600; }

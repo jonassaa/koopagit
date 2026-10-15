@@ -1,5 +1,18 @@
+import { Palette } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
 // Base for every top-level dialog: carries the KoopaGit icon, as each
 // TortoiseGit dialog carries the TortoiseGit icon in its title bar.
 export component KoopaWindow inherits Window {
     icon: @image-url("images/koopagit.png");
+    background: Theme.window-bg;
+    // Light and Dark force the widgets' colour scheme; Classic keeps the system's.
+    property <int> theme-style: Theme.style;
+    changed theme-style => {
+        if (Theme.style == 1) {
+            Palette.color-scheme = ColorScheme.light;
+        } else if (Theme.style == 2) {
+            Palette.color-scheme = ColorScheme.dark;
+        }
+    }
 }

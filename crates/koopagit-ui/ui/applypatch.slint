@@ -4,6 +4,8 @@ import { NoticeBar } from "msgbox.slint";
 import { Colors } from "common.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys } from "keys.slint";
+import { Theme } from "theme.slint";
+import { RowBackground } from "common.slint";
 
 export struct PatchRow {
     checked: bool,
@@ -105,11 +107,19 @@ export component ApplyPatchDialog inherits KoopaWindow {
                     }
                     Rectangle {
                         border-width: 1px;
-                        border-color: list-keys.has-focus ? Palette.accent-background : #8886;
+                        border-color: list-keys.has-focus ? Palette.accent-background : Theme.border;
+                        border-radius: Theme.panel-radius;
+                        background: Theme.surface;
+                        clip: Theme.modern;
                         ListView {
                             for row[i] in root.rows: Rectangle {
                                 height: 24px;
-                                background: i == root.current-row ? Colors.selection : row.state == 1 ? #0366d622 : transparent;
+                                RowBackground {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    selected: i == root.current-row;
+                                    fill: row.state == 1 ? Theme.highlight : transparent;
+                                }
                                 TouchArea {
                                     clicked => {
                                         list-keys.focus();

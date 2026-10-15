@@ -133,7 +133,7 @@ pub fn show(
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.show()?;
     keep_alive(dlg);
     Ok(())

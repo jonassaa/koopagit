@@ -2,6 +2,7 @@
 import { CheckBox, ListView, Palette } from "std-widgets.slint";
 import { MenuBlock, DynMenuArea } from "dynmenu.slint";
 import { SpaceActivate } from "keys.slint";
+import { Theme } from "theme.slint";
 
 export struct FileRow {
     checked: bool,
@@ -16,18 +17,19 @@ export struct FileRow {
     kind: int,
 }
 
+// Status colours used across dialogs; values come from the active theme.
 export global Colors {
-    out property <color> added: #6f42c1;
-    out property <color> deleted: #b31d28;
-    out property <color> modified: #005cc5;
-    out property <color> conflict: #d73a49;
-    out property <color> renamed: #22863a;
-    out property <color> muted: #6a737d;
-    out property <color> header-bg: #8882;
-    out property <color> selection: #0366d633;
-    out property <color> diff-add: #28a74533;
-    out property <color> diff-del: #d73a4933;
-    out property <color> diff-hunk: #0366d622;
+    out property <color> added: Theme.added;
+    out property <color> deleted: Theme.deleted;
+    out property <color> modified: Theme.modified;
+    out property <color> conflict: Theme.conflict;
+    out property <color> renamed: Theme.renamed;
+    out property <color> muted: Theme.muted;
+    out property <brush> header-bg: Theme.header-bg;
+    out property <color> selection: Theme.selection;
+    out property <color> diff-add: Theme.diff-add;
+    out property <color> diff-del: Theme.diff-del;
+    out property <color> diff-hunk: Theme.diff-hunk;
 }
 
 // Routes every FileList's mouse, keyboard and context-menu events to Rust
@@ -53,6 +55,61 @@ export global FileListBridge {
 component Cell inherits Text {
     vertical-alignment: center;
     overflow: elide;
+}
+
+// Column header band of a list: a grey band in Classic, a hairline in the modern theme.
+export component ListHeader inherits Rectangle {
+    height: Theme.header-height;
+    background: Theme.header-bg;
+    @children
+    if Theme.modern: Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+}
+
+export component HeaderText inherits Text {
+    font-weight: Theme.header-weight;
+    color: Theme.header-fg;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// Selection/hover fill behind a list row: full width in Classic, inset and
+// rounded in the modern theme. `current` draws the focus outline.
+export component RowBackground {
+    in property <bool> selected;
+    in property <bool> hover;
+    in property <bool> current;
+    // Background of a row that is marked but not selected.
+    in property <color> fill: transparent;
+    Rectangle {
+        x: Theme.row-inset;
+        width: root.width - 2 * Theme.row-inset;
+        height: root.height;
+        border-radius: Theme.row-radius;
+        background: root.selected ? Theme.selection : root.hover ? Theme.hover : root.fill;
+        border-width: root.current ? 1px : 0px;
+        border-color: Theme.focus-ring;
+    }
+}
+
+// A bordered list/tree container: plain box in Classic, rounded card in the modern theme.
+export component Panel inherits Rectangle {
+    border-width: 1px;
+    border-color: Theme.border;
+    border-radius: Theme.panel-radius;
+    background: Theme.surface;
+    clip: Theme.modern;
+}
+
+// Background of a hand-drawn popup menu or options panel.
+export component PopupPanel inherits Rectangle {
+    background: Theme.popup-bg;
+    border-width: 1px;
+    border-color: Theme.border-strong;
+    border-radius: Theme.modern ? 8px : 0px;
 }
 
 // CLinkControl: a hyperlink-style label that is a Tab stop. Space, Enter or a
@@ -84,7 +141,7 @@ export component LinkLabel {
         label := Text {
             text: root.text;
             vertical-alignment: center;
-            color: root.active ? #0366d6 : #8888;
+            color: root.active ? Theme.link : Theme.disabled;
         }
         focus := SpaceActivate {
             enabled: root.active;
@@ -122,19 +179,21 @@ export component FileList inherits Rectangle {
 
     forward-focus: keys;
     border-width: 1px;
-    border-color: #8886;
+    border-color: Theme.border;
+    border-radius: Theme.panel-radius;
+    background: Theme.surface;
+    clip: Theme.modern;
     VerticalLayout {
-        Rectangle {
-            height: 22px;
-            background: Colors.header-bg;
+        ListHeader {
             HorizontalLayout {
-                padding-left: root.checkable ? 30px : 6px;
+                padding-left: (root.checkable ? 30px : 6px) + Theme.row-inset;
+                padding-right: Theme.row-inset;
                 spacing: 6px;
-                Cell { text: root.path-header; horizontal-stretch: 6; font-weight: 600; }
-                Cell { text: "Extension"; width: 70px; font-weight: 600; }
-                Cell { text: root.status-header; width: 90px; font-weight: 600; }
-                if root.show-numstat: Cell { text: "Lines added"; width: 80px; font-weight: 600; }
-                if root.show-numstat: Cell { text: "Lines removed"; width: 90px; font-weight: 600; }
+                HeaderText { text: root.path-header; horizontal-stretch: 6; }
+                HeaderText { text: "Extension"; width: 70px; }
+                HeaderText { text: root.status-header; width: 90px; }
+                if root.show-numstat: HeaderText { text: "Lines added"; width: 80px; horizontal-alignment: Theme.modern ? right : left; }
+                if root.show-numstat: HeaderText { text: "Lines removed"; width: 90px; horizontal-alignment: Theme.modern ? right : left; }
             }
         }
         // GitStatusListCtrl keys (spec-keyboard §1.1). Escape and Tab bubble to the dialog.
@@ -173,13 +232,18 @@ export component FileList inherits Rectangle {
             }
             ListView {
                 for row[i] in root.rows: Rectangle {
-                    height: 22px;
-                    background: row.selected || i == root.current ? Colors.selection : transparent;
+                    height: Theme.row-height;
+                    RowBackground {
+                        width: parent.width;
+                        height: parent.height;
+                        selected: row.selected || i == root.current;
+                        hover: row-touch.has-hover;
+                    }
                     DynMenuArea {
                         enabled: root.menu-enabled;
                         blocks() => { return FileListBridge.menu(root.list-id, i); }
                         chosen(id) => { FileListBridge.chosen(root.list-id, i, id); }
-                        TouchArea {
+                        row-touch := TouchArea {
                             double-clicked => { root.current = i; root.activated(i); }
                             pointer-event(e) => {
                                 if (e.kind == PointerEventKind.down) {
@@ -200,7 +264,8 @@ export component FileList inherits Rectangle {
                         }
                     }
                     HorizontalLayout {
-                        padding-left: 6px;
+                        padding-left: 6px + Theme.row-inset;
+                        padding-right: Theme.row-inset;
                         spacing: 6px;
                         if root.checkable: CheckBox {
                             width: 20px;
@@ -215,10 +280,10 @@ export component FileList inherits Rectangle {
                                 : row.kind == 3 ? Colors.modified : row.kind == 4 ? Colors.conflict
                                 : row.kind == 5 ? Colors.renamed : row.kind == 6 ? Colors.muted : Palette.foreground;
                         }
-                        Cell { text: row.extension; width: 70px; }
+                        Cell { text: row.extension; width: 70px; color: Theme.modern ? Theme.muted : Palette.foreground; }
                         Cell { text: row.status; width: 90px; }
-                        if root.show-numstat: Cell { text: row.added; width: 80px; horizontal-alignment: right; }
-                        if root.show-numstat: Cell { text: row.removed; width: 90px; horizontal-alignment: right; }
+                        if root.show-numstat: Cell { text: row.added; width: 80px; horizontal-alignment: right; color: Theme.plus; }
+                        if root.show-numstat: Cell { text: row.removed; width: 90px; horizontal-alignment: right; color: Theme.minus; }
                     }
                 }
             }

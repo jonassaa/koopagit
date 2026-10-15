@@ -266,7 +266,7 @@ pub fn commit_is_on_refs(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(0)
 }
@@ -430,7 +430,7 @@ pub fn firststart(repo: Option<&Repo>, mut settings: Settings) -> DialogResult<i
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     if !*finished.borrow() {
         return Ok(1);

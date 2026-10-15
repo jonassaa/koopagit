@@ -5,6 +5,7 @@ import { ChooseVersion, Radio } from "choose.slint";
 import { NoticeBar } from "msgbox.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys, SpaceActivate } from "keys.slint";
+import { Theme } from "theme.slint";
 
 // Tri-state checkbox: 0 unchecked, 1 checked, 2 indeterminate.
 export component TriCheck inherits Rectangle {
@@ -22,7 +23,7 @@ export component TriCheck inherits Rectangle {
                 height: 16px;
                 border-radius: 3px;
                 border-width: 1px;
-                border-color: root.enabled ? Palette.foreground : #8888;
+                border-color: root.enabled ? Palette.foreground : Theme.disabled;
                 background: root.state == 1 ? Palette.accent-background : transparent;
                 Text {
                     text: root.state == 1 ? "✓" : root.state == 2 ? "–" : "";
@@ -34,7 +35,7 @@ export component TriCheck inherits Rectangle {
         Text {
             text: root.text;
             vertical-alignment: center;
-            color: root.enabled ? Palette.foreground : #8888;
+            color: root.enabled ? Palette.foreground : Theme.disabled;
         }
     }
     // BS_AUTO3STATE access key: cycle the state and focus the box.

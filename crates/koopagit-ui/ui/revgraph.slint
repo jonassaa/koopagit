@@ -3,6 +3,7 @@ import { ScrollView, Palette } from "std-widgets.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys } from "keys.slint";
+import { Theme } from "theme.slint";
 
 export struct GraphNode {
     // Top-left corner at zoom 1, in logical pixels.
@@ -142,8 +143,7 @@ export component RevisionGraphDialog inherits KoopaWindow {
                     border-radius: 6px * root.zoom;
                     border-width: n.selected ? 3px : 1px;
                     border-color: n.selected ? Palette.accent-background : Palette.border;
-                    background: n.kind == 1 ? #ff6464 : n.kind == 2 ? #7fdc7f : n.kind == 3 ? #ffdcaa
-                        : n.kind == 4 ? #ffff8c : n.kind == 5 ? #d0d0d0 : #f0f0f0;
+                    background: Theme.node-bg(n.kind);
                     clip: true;
                     DynMenuArea {
                         blocks() => { return root.menu-for(i); }
@@ -168,7 +168,7 @@ export component RevisionGraphDialog inherits KoopaWindow {
                         alignment: center;
                         Text {
                             text: n.labels != "" ? n.labels : n.title;
-                            color: #000;
+                            color: Theme.node-title;
                             font-size: 12px * root.zoom;
                             font-weight: 600;
                             horizontal-alignment: center;
@@ -176,7 +176,7 @@ export component RevisionGraphDialog inherits KoopaWindow {
                         }
                         Text {
                             text: n.labels != "" ? n.title : n.subject;
-                            color: #333;
+                            color: Theme.node-text;
                             font-size: 10px * root.zoom;
                             horizontal-alignment: center;
                             overflow: elide;

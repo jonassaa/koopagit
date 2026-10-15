@@ -281,7 +281,7 @@ pub fn switch(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let mode = dlg.get_mode();
     if mode == 3 || mode == 2 {
@@ -510,7 +510,7 @@ pub fn branch_tag(ctx: &mut Context, is_tag: bool) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let Some(c) = chosen.take() else {
         return Ok(1);
@@ -708,7 +708,7 @@ pub fn merge(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let Some(opts) = chosen.take() else {
         return Ok(1);
@@ -790,7 +790,7 @@ fn merge_abort(ctx: &mut Context) -> DialogResult<i32> {
             spawn_launcher(&Invocation::new("repostatus").with_paths([workdir.clone()]));
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     if !*accepted.borrow() {
         return Ok(1);
@@ -874,7 +874,7 @@ pub fn stash_save(ctx: &mut Context) -> DialogResult<i32> {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let Some((message, untracked)) = chosen.take() else {
         return Ok(1);

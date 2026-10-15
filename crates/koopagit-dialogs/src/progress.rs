@@ -162,7 +162,7 @@ struct Shared {
 /// Shows the progress dialog and runs the job. Returns whether every command succeeded.
 pub fn run(job: ProgressJob) -> Result<bool, slint::PlatformError> {
     let (dlg, success) = start_inner(job, None)?;
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     let ok = *success.lock().unwrap();
     Ok(ok)
@@ -193,6 +193,7 @@ fn start_inner(
     done_id: Option<u64>,
 ) -> Result<(ProgressDialog, Arc<Mutex<bool>>), slint::PlatformError> {
     let dlg = ProgressDialog::new()?;
+    crate::window::apply_theme(&dlg);
     dlg.set_dialog_title(job.title.clone().into());
     let shared = Arc::new(Mutex::new(Shared {
         out: OutputBuffer::default(),

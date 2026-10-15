@@ -1,11 +1,12 @@
 // File-operation dialogs: Add, Revert, Resolve (shared file-list dialog), Clean,
 // Ignore, Working Tree (Check for modifications), Git Init and a simple input box.
-import { Button, CheckBox, LineEdit, GroupBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Button, CheckBox, LineEdit, GroupBox, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
 import { FileList, FileRow, LinkLabel } from "common.slint";
 import { Radio } from "choose.slint";
 import { NoticeBar } from "msgbox.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys } from "keys.slint";
+import { Theme } from "theme.slint";
 
 // IDD_ADD / IDD_REVERT / IDD_RESOLVE.
 export component FileListDialog inherits KoopaWindow {
@@ -88,7 +89,7 @@ export component FileListDialog inherits KoopaWindow {
                         horizontal-alignment: center;
                         vertical-alignment: center;
                         wrap: word-wrap;
-                        color: #888;
+                        color: Theme.faint;
                     }
                 }
                 if root.note-text != "": Text {
@@ -413,7 +414,7 @@ export component WorkingTreeDialog inherits KoopaWindow {
                         horizontal-alignment: center;
                         vertical-alignment: center;
                         wrap: word-wrap;
-                        color: #888;
+                        color: Theme.faint;
                     }
                 }
                 HorizontalLayout {
@@ -496,9 +497,10 @@ export component WorkingTreeDialog inherits KoopaWindow {
         x: 120px;
         y: root.height - 150px;
         Rectangle {
-            background: #ffffff;
+            background: Theme.modern ? Theme.popup-bg : #ffffff;
             border-width: 1px;
-            border-color: #888;
+            border-color: Theme.border-strong;
+            border-radius: Theme.modern ? 8px : 0px;
             VerticalLayout {
                 padding: 4px;
                 for label[i] in ["Stash changes", "Stash Pop", "Stash Apply", "Stash List"]: Rectangle {
@@ -506,7 +508,7 @@ export component WorkingTreeDialog inherits KoopaWindow {
                     width: 150px;
                     Text {
                         text: label;
-                        color: #000;
+                        color: Theme.modern ? Palette.foreground : #000;
                         x: 6px;
                         vertical-alignment: center;
                         height: parent.height;

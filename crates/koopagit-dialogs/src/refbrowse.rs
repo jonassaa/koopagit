@@ -488,7 +488,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             a.pick(&current.map_or_else(|| "HEAD".to_owned(), |c| format!("refs/heads/{c}")));
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(0)
 }
@@ -910,6 +910,7 @@ fn delete_remote_tags(workdir: PathBuf, remote: &str) {
     let Ok(dlg) = DeleteRemoteTagDialog::new() else {
         return;
     };
+    crate::window::apply_theme(&dlg);
     dlg.set_dialog_title(crate::window_title(&workdir, "Delete remote tags").into());
     dlg.set_remote(remote.into());
     let model = Rc::new(VecModel::<RefCheckRow>::default());

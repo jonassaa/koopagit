@@ -6,6 +6,7 @@ import { NoticeBar } from "msgbox.slint";
 import { DynMenuArea, MenuBlock } from "dynmenu.slint";
 import { KoopaWindow } from "window.slint";
 import { DialogKeys, SpaceActivate } from "keys.slint";
+import { Theme } from "theme.slint";
 
 // IDD_SVNDCOMMITTYPE: caption "SVN Commit Type".
 export component SvnDcommitDialog inherits KoopaWindow {
@@ -163,7 +164,7 @@ export component SendMailDialog inherits KoopaWindow {
                 // The "eMail settings" link is a tab stop (WS_TABSTOP).
                 Text {
                     text: "eMail settings";
-                    color: #0366d6;
+                    color: Theme.link;
                     vertical-alignment: center;
                     settings-link := SpaceActivate {
                         activated => { root.email-settings(); }

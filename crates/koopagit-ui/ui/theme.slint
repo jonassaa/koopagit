@@ -1,0 +1,123 @@
+// KoopaGit's looks (Settings > General > Theme, `KoopaGitTheme`): Classic is
+// TortoiseGit's styling and follows the system colour scheme; Light and Dark
+// are the modern styling with that colour scheme forced (docs/divergences.md).
+// Every colour, row height and panel shape a dialog draws comes from here, and
+// in Classic each token keeps the value the dialogs used before themes existed.
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    // 0 Classic, 1 Light, 2 Dark. Set from Rust before a window is shown.
+    in-out property <int> style: 0;
+    out property <bool> modern: style != 0;
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    // Window and panels
+    out property <brush> window-bg: !modern ? Palette.background : dark ? #1e2026 : #f3f4f7;
+    out property <brush> surface: !modern ? transparent : dark ? #25282f : #ffffff;
+    // Menus and drop-downs drawn by hand.
+    out property <brush> popup-bg: !modern ? Palette.background : dark ? #2a2d35 : #ffffff;
+    out property <color> border: !modern ? #8886 : dark ? #353943 : #dfe2e8;
+    out property <color> border-strong: !modern ? #888 : dark ? #424754 : #c9ced8;
+    out property <length> panel-radius: modern ? 8px : 0px;
+    out property <length> control-radius: modern ? 6px : 3px;
+
+    // List headers and rows
+    out property <brush> header-bg: !modern ? #8882 : transparent;
+    out property <brush> header-fg: !modern ? Palette.foreground : muted;
+    out property <int> header-weight: modern ? 500 : 600;
+    out property <length> header-height: modern ? 28px : 22px;
+    out property <length> row-height: modern ? 26px : 22px;
+    // Modern rows are drawn inset and rounded; Classic rows fill the list width.
+    out property <length> row-inset: modern ? 4px : 0px;
+    out property <length> row-radius: modern ? 5px : 0px;
+    out property <color> selection: !modern ? #0366d633 : dark ? #7b93f540 : #3a5ccc2e;
+    out property <color> hover: !modern ? transparent : dark ? #ffffff0d : #1d21290a;
+    out property <color> focus-ring: !modern ? #0366d688 : accent;
+    // A row marked but not selected (applied patch, current rebase step).
+    out property <color> highlight: !modern ? #0366d622 : dark ? #7b93f51f : #3a5ccc14;
+    out property <color> pending: !modern ? #e3b34140 : dark ? #e8c54729 : #c997002b;
+
+    // Text
+    out property <color> accent: !modern ? #0366d6 : dark ? #7b93f5 : #3a5ccc;
+    out property <color> link: accent;
+    out property <color> muted: !modern ? #6a737d : dark ? #9aa1ae : #6b7383;
+    // Secondary text written as #888 before themes.
+    out property <color> faint: !modern ? #888 : muted;
+    // Disabled captions and control outlines.
+    out property <color> disabled: !modern ? #8888 : dark ? #6c7381 : #a3a9b5;
+
+    // File and action status (Colors 1 page hues)
+    out property <color> added: !modern ? #6f42c1 : dark ? #b693ff : #7a49d6;
+    out property <color> deleted: !modern ? #b31d28 : dark ? #ff7b8f : #c4314b;
+    out property <color> modified: !modern ? #005cc5 : dark ? #8ea4ff : #3a5ccc;
+    out property <color> conflict: !modern ? #d73a49 : dark ? #ff7b8f : #d1334d;
+    out property <color> renamed: !modern ? #22863a : dark ? #6fd38c : #2b9348;
+    out property <color> success: !modern ? #2e7d32 : dark ? #6fd38c : #2b9348;
+    out property <color> failure: !modern ? #c42b1c : dark ? #ff7b8f : #c4314b;
+    out property <color> plus: !modern ? Palette.foreground : renamed;
+    out property <color> minus: !modern ? Palette.foreground : deleted;
+
+    // Notice and input bars
+    out property <color> notice-bg: !modern ? #0366d622 : dark ? #7b93f524 : #3a5ccc17;
+    out property <color> notice-error-bg: !modern ? #d73a4922 : dark ? #ff7b8f24 : #c4314b17;
+    out property <color> progress: !modern ? #2f7ed8 : accent;
+
+    // Diff and merge viewers
+    out property <color> diff-add: !modern ? #28a74533 : dark ? #5cc77a2b : #2b934824;
+    out property <color> diff-del: !modern ? #d73a4933 : dark ? #ff7b8f2b : #c4314b1f;
+    out property <color> diff-hunk: !modern ? #0366d622 : dark ? #7b93f51f : #3a5ccc14;
+    out property <color> diff-changed: !modern ? #e3b34130 : dark ? #e8c54724 : #c997001f;
+    out property <color> diff-empty: !modern ? #8881 : dark ? #ffffff08 : #1d212908;
+    out property <color> diff-conflict: !modern ? #d73a4950 : dark ? #ff7b8f40 : #c4314b33;
+    out property <color> diff-resolved: !modern ? #28a74520 : dark ? #5cc77a1f : #2b93481a;
+    out property <color> diff-header: !modern ? #0366d630 : dark ? #7b93f529 : #3a5ccc1c;
+    out property <color> diff-hunk-fg: !modern ? #6f42c1 : dark ? #b693ff : #7a49d6;
+    out property <color> gutter: !modern ? #8888 : disabled;
+
+    // Log ref labels (Colors 2 page kinds): 0 current, 1 local, 2 remote, 3 tag, 4 stash, 5 other.
+    out property <length> chip-height: modern ? 18px : 16px;
+    out property <length> chip-radius: modern ? 9px : 3px;
+    pure public function chip-bg(kind: int) -> color {
+        if (!modern) {
+            return kind == 0 || kind == 1 ? #ff8c42 : kind == 2 ? #f0e442 : kind == 3 ? #fcdc3c : kind == 4 ? #b0b0b0 : #c8c8ff;
+        }
+        if (kind == 0) { return dark ? #f59a52 : #e0661b; }
+        return chip-hue(kind).with-alpha(dark ? 0.15 : 0.12);
+    }
+    pure public function chip-fg(kind: int) -> color {
+        if (!modern) { return black; }
+        if (kind == 0) { return dark ? #1b1408 : #ffffff; }
+        if (kind == 1) { return dark ? #f8b27a : #b34f10; }
+        if (kind == 2) { return dark ? #ecd06e : #8a6800; }
+        if (kind == 3) { return dark ? #7fd897 : #22743a; }
+        if (kind == 4) { return dark ? #c2c8d3 : #59606d; }
+        return dark ? #b3c0ff : #3a4fa8;
+    }
+    pure public function chip-border(kind: int) -> color {
+        if (!modern) { return #0006; }
+        if (kind == 0) { return transparent; }
+        return chip-hue(kind).with-alpha(dark ? 0.4 : 0.35);
+    }
+    pure function chip-hue(kind: int) -> color {
+        return kind == 1 ? (dark ? #f59a52 : #e0661b) : kind == 2 ? (dark ? #e8c547 : #c99700)
+            : kind == 3 ? (dark ? #5cc77a : #2b9348) : kind == 4 ? (dark ? #a3abb9 : #7b8494)
+            : (dark ? #8ea4ff : #3a5ccc);
+    }
+
+    // Log graph lanes when the Colors 3 branch-line colours are left at their defaults.
+    out property <[color]> lanes-light: [#3a5ccc, #e0661b, #2b9348, #a43fc4, #0f8b9c, #c99700, #d6336c, #7b8494];
+    out property <[color]> lanes-dark: [#7b93f5, #f59a52, #5cc77a, #cf86e8, #4cc4d4, #e8c547, #f27aa0, #a3abb9];
+
+    // Revision graph node kinds: 1 current, 2 local, 3 remote, 4 tag, 5 stash/other, else commit.
+    pure public function node-bg(kind: int) -> color {
+        if (!modern) {
+            return kind == 1 ? #ff6464 : kind == 2 ? #7fdc7f : kind == 3 ? #ffdcaa : kind == 4 ? #ffff8c : kind == 5 ? #d0d0d0 : #f0f0f0;
+        }
+        if (dark) {
+            return kind == 1 ? #5a2a33 : kind == 2 ? #23472f : kind == 3 ? #4d3a22 : kind == 4 ? #4a4320 : kind == 5 ? #383c46 : #2a2d35;
+        }
+        return kind == 1 ? #fbd5da : kind == 2 ? #d3f0db : kind == 3 ? #fde3cc : kind == 4 ? #f8efc2 : kind == 5 ? #e4e7ec : #ffffff;
+    }
+    out property <color> node-title: !modern ? #000 : dark ? #e3e6ec : #1d2129;
+    out property <color> node-text: !modern ? #333 : dark ? #b8bfcc : #4a5160;
+}

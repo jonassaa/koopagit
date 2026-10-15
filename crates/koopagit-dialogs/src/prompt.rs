@@ -16,6 +16,7 @@ pub fn text(
     let Ok(dlg) = InputDialog::new() else {
         return;
     };
+    crate::window::apply_theme(&dlg);
     dlg.set_dialog_title(title.into());
     dlg.set_label(label.into());
     dlg.set_value(value.into());

@@ -4,6 +4,7 @@ import { FileList, FileRow, LinkLabel } from "common.slint";
 import { DialogKeys } from "keys.slint";
 import { EditCombo, KeyMenu } from "remote_widgets.slint";
 import { KoopaWindow } from "window.slint";
+import { Theme } from "theme.slint";
 
 export component FileDiffDialog inherits KoopaWindow {
     in property <string> dialog-title: "Changed Files - KoopaGit";
@@ -100,7 +101,7 @@ export component FileDiffDialog inherits KoopaWindow {
                             rev1-arrow := Button { text: "▾"; width: 28px; clicked => { rev1-menu.show(); } }
                         }
                     }
-                    Text { text: root.rev1-info; overflow: elide; color: #888; }
+                    Text { text: root.rev1-info; overflow: elide; color: Theme.faint; }
                 }
             }
             GroupBox {
@@ -120,7 +121,7 @@ export component FileDiffDialog inherits KoopaWindow {
                             rev2-arrow := Button { text: "▾"; width: 28px; clicked => { rev2-menu.show(); } }
                         }
                     }
-                    Text { text: root.rev2-info; overflow: elide; color: #888; }
+                    Text { text: root.rev2-info; overflow: elide; color: Theme.faint; }
                 }
             }
             HorizontalLayout {
@@ -162,7 +163,7 @@ export component FileDiffDialog inherits KoopaWindow {
                 }
                 if root.list-text != "": Text {
                     text: root.list-text;
-                    color: #888;
+                    color: Theme.faint;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }

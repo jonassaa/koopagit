@@ -457,7 +457,7 @@ pub fn run_diff(
     if let Some(r) = start {
         jump(r);
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(())
 }
@@ -881,7 +881,7 @@ pub fn run_conflict(args: ConflictArgs) -> DialogResult<i32> {
     if count > 0 {
         go(0);
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     for f in &args.cleanup {
         let _ = std::fs::remove_file(f);
@@ -949,7 +949,7 @@ pub fn run_udiff(title: &str, text: &str) -> DialogResult {
             }
         });
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(())
 }
@@ -1165,7 +1165,7 @@ pub fn run_blame(repo: &Repo, rel: &str, rev: Option<&str>, line: Option<usize>)
         let row = l.saturating_sub(1).min(blame.lines.len().saturating_sub(1));
         dlg.set_current(row as i32);
     }
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
     Ok(())
 }

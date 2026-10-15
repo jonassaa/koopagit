@@ -30,8 +30,10 @@ use crate::{
     StatRow, StatisticsDialog, keep_alive, spawn_launcher,
 };
 
-/// Lane width: three quarters of the row height, as upstream's `DrawGraph`.
+/// Lane width: three quarters of the Classic row height, as upstream's `DrawGraph`.
 const LANE: f32 = 16.0;
+/// Classic row height; the modern theme's rows are taller (`Theme.row-height`).
+#[cfg(test)]
 const ROW: f32 = 22.0;
 /// Cubic Bézier control-point factor for a quarter ellipse.
 const KAPPA: f32 = 0.552_284_8;
@@ -41,20 +43,20 @@ const LANE_COLORS: usize = 8;
 const BRANCH_LINE_DEFAULTS: [u32; LANE_COLORS] =
     [0, 255, 65280, 16711680, 8421504, 32896, 8421376, 8388736];
 
-/// Path commands for one graph row (lane width 16, row height 22), grouped
+/// Path commands for one graph row (lane width 16, `row_height` px), grouped
 /// by lane colour. A line takes the colour of the lane it occupies at the row
 /// edge. As in upstream's `paintGraphLane`, a branch leaves or joins the node
 /// along a horizontal line that bends into its lane with a quarter-ellipse
 /// arc; a lane shifting sideways away from the node is an S-curve.
-pub fn graph_paths(row: &GraphRow) -> Vec<(usize, String)> {
+pub fn graph_paths(row: &GraphRow, row_height: f32) -> Vec<(usize, String)> {
     let x = |lane: usize| lane as f32 * LANE + LANE / 2.0;
-    let mid = ROW / 2.0;
+    let mid = row_height / 2.0;
     let mut paths: Vec<(usize, String)> = Vec::new();
     for l in &row.lines {
         let (edge, inner, ye) = if l.upper {
             (l.from, l.to, 0.0)
         } else {
-            (l.to, l.from, ROW)
+            (l.to, l.from, row_height)
         };
         let (xe, xi) = (x(edge), x(inner));
         let cmd = if edge == inner {
@@ -113,6 +115,12 @@ fn apply_graph_settings(dlg: &LogDialog, settings: &koopagit_core::settings::Set
     };
     dlg.set_lane_colors(model(&|c| c));
     dlg.set_lane_colors_dark(model(&invert_lightness));
+    dlg.set_lane_colors_default(
+        BRANCH_LINE_DEFAULTS
+            .iter()
+            .map(|&d| colorref_rgb(d))
+            .eq(rgb.iter().copied()),
+    );
     let width = settings.dword(r"TortoiseProc\Graph\LogLineWidth", 2).max(1);
     let node = settings.dword(r"TortoiseProc\Graph\LogNodeSize", 10).max(1);
     dlg.set_graph_line_width(width as f32);
@@ -303,6 +311,7 @@ struct Setup {
 
 pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     let dlg = LogDialog::new()?;
+    crate::window::apply_theme(&dlg);
     let repo = &ctx.repo;
     let inv = ctx.invocation.clone();
     let workdir = repo.workdir().to_owned();
@@ -545,6 +554,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                 )
             };
             d.set_graph_width(graph_width(&graph));
+            let row_height = d.global::<crate::Theme>().get_row_height();
             let rows: Vec<LogRow> = visible
                 .iter()
                 .enumerate()
@@ -553,7 +563,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                     let g = graph.get(n).cloned().unwrap_or_default();
                     LogRow {
                         graph: ModelRc::new(VecModel::from(
-                            graph_paths(&g)
+                            graph_paths(&g, row_height)
                                 .into_iter()
                                 .map(|(color, commands)| GraphPath {
                                     commands: commands.into(),
@@ -1342,7 +1352,7 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
     }
 
     reload();
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.run()?;
 
     if !forced_whole {
@@ -1509,7 +1519,7 @@ fn show_statistics(workdir: &std::path::Path, s: &logtools::Statistics) -> Dialo
             let _ = d.hide();
         }
     });
-    crate::snapshot::arm(&dlg);
+    crate::window::prepare(&dlg);
     dlg.show()?;
     keep_alive(dlg);
     Ok(())
@@ -1555,7 +1565,7 @@ mod tests {
             lines: vec![line(0, 0, true), line(0, 1, false), line(2, 1, false)],
             width: 3,
         };
-        let paths = graph_paths(&row);
+        let paths = graph_paths(&row, ROW);
         assert_eq!(paths[0], (0, "M 8 11 L 8 0 ".to_string()));
         // Horizontal to the lane boundary, then a quarter ellipse down into lane 1.
         assert_eq!(paths[1].0, 1);
@@ -1564,7 +1574,7 @@ mod tests {
         // Away from the node: an S-curve, joined into the same colour group.
         assert!(paths[1].1.ends_with("M 40 11 C 40 16.5 24 16.5 24 22 "));
         assert_eq!(paths.len(), 2);
-        assert!(graph_paths(&GraphRow::default()).is_empty());
+        assert!(graph_paths(&GraphRow::default(), ROW).is_empty());
     }
 
     #[test]

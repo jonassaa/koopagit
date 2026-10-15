@@ -603,7 +603,7 @@ impl LogActions {
                 let _ = d.hide();
             }
         });
-        crate::snapshot::arm(&dlg);
+        crate::window::prepare(&dlg);
         let _ = dlg.show();
         keep_alive(dlg);
     }
