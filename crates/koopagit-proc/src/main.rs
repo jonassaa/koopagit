@@ -94,6 +94,7 @@ const COMMANDS: &[(&str, Needs)] = &[
 ];
 
 fn main() -> ExitCode {
+    koopagit_dialogs::platform::init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let invocation = if cli::is_upstream_syntax(&args) {
         match Invocation::parse(&args) {

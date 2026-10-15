@@ -8,6 +8,7 @@ use koopagit_core::launcher::Invocation;
 use koopagit_dialogs::{diffcmd, msgbox};
 
 fn main() -> ExitCode {
+    koopagit_dialogs::platform::init();
     let inv = match Invocation::parse(std::env::args().skip(1)) {
         Ok(i) => i,
         Err(e) => {

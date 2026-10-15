@@ -14,6 +14,10 @@ arboard = { version = "3.6", default-features = false }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
 trash = "5.2"
 
+# platform::init sets the activation policy through winit's event loop builder.
+[target.'cfg(target_os = "macos")'.dependencies]
+slint = { version = "1.18", features = ["unstable-winit-030"] }
+
 [dev-dependencies]
 i-slint-backend-testing = "1.18"
 i-slint-common = "1.18"
