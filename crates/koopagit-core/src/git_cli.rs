@@ -1,7 +1,7 @@
 //! Running the `git` executable, the way TortoiseGit does for mutating operations.
 
 use std::collections::HashMap;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
@@ -115,53 +115,70 @@ impl Git {
     }
 }
 
-/// First git whose `checkout` and `reset` accept `--end-of-options` before the revision.
-/// Older ones (Ubuntu 22.04 ships 2.34, 24.04 ships 2.43) keep the marker as an argument
-/// and fail with "only one reference expected, 2 given" or "option '--end-of-options'
-/// must come before non-option arguments" (fixed upstream in 2.44, see its release notes).
-const END_OF_OPTIONS_FIXED: (u32, u32) = (2, 44);
+type Version = (u32, u32);
 
-/// Subcommands that mis-parse `--end-of-options` before [`END_OF_OPTIONS_FIXED`]. Every other
-/// command KoopaGit passes it to handles it since git 2.24.
-const KEEPS_END_OF_OPTIONS: &[&str] = &["checkout", "reset"];
+/// Separators in TortoiseGit's command lines that older git rejects: the command words,
+/// the separator, and the first git release that accepts it there. Linux and WSL use the
+/// distribution's git (Ubuntu 22.04 ships 2.34, Debian 12 2.39, Ubuntu 24.04 2.43).
+/// Every other command KoopaGit passes `--` or `--end-of-options` to accepts it in 2.34.
+const OLD_GIT_SEPARATORS: &[(&[&str], &str, Version)] = &[
+    // Kept as an argument: "only one reference expected, 2 given" / "option
+    // '--end-of-options' must come before non-option arguments" (2.44 release notes).
+    (&["checkout"], "--end-of-options", (2, 44)),
+    (&["reset"], "--end-of-options", (2, 44)),
+    // Counted as an argument before these parsed options: "usage: git remote rename ...".
+    (&["remote", "rename"], "--", (2, 36)),
+    (&["remote", "rm"], "--", (2, 38)),
+    (&["remote", "remove"], "--", (2, 38)),
+];
 
-/// Adapts TortoiseGit's argument list to the installed git: drops `--end-of-options` from
-/// `checkout` and `reset` when git is older than 2.44. The marker is kept when the next
-/// argument starts with `-`, so such a revision still fails instead of becoming an option.
-/// `version` is only asked when an affected command line is seen.
+/// Adapts TortoiseGit's argument list to the installed git: drops the separators listed in
+/// [`OLD_GIT_SEPARATORS`] when git is older than the release that accepts them. A separator
+/// is kept when the next argument starts with `-`, so such a revision or name still fails
+/// instead of becoming an option. `version` is only asked when an affected command is seen.
 fn compat_args(
     mut args: Vec<OsString>,
-    version: impl FnOnce() -> Option<(u32, u32)>,
+    version: impl FnOnce() -> Option<Version>,
 ) -> Vec<OsString> {
-    let Some(pos) = args.iter().position(|a| a == "--end-of-options") else {
+    let Some(start) = subcommand_index(&args) else {
+        return args;
+    };
+    let Some(&(words, separator, fixed)) = OLD_GIT_SEPARATORS.iter().find(|(words, ..)| {
+        args.len() >= start + words.len() && words.iter().zip(&args[start..]).all(|(w, a)| a == *w)
+    }) else {
+        return args;
+    };
+    let after = start + words.len();
+    let Some(pos) = args[after..]
+        .iter()
+        .position(|a| a == separator)
+        .map(|p| after + p)
+    else {
         return args;
     };
     let protects_dash = args
         .get(pos + 1)
         .is_some_and(|next| next.to_string_lossy().starts_with('-') && next != "--");
-    let affected = subcommand(&args)
-        .and_then(OsStr::to_str)
-        .is_some_and(|c| KEEPS_END_OF_OPTIONS.contains(&c));
-    if affected && !protects_dash && version().is_some_and(|v| v < END_OF_OPTIONS_FIXED) {
+    if !protects_dash && version().is_some_and(|v| v < fixed) {
         args.remove(pos);
     }
     args
 }
 
-/// The git subcommand in `args`, skipping global options (`-c <key=value>`, `-C <dir>`).
-fn subcommand(args: &[OsString]) -> Option<&OsStr> {
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
+/// Index of the git subcommand in `args`, skipping global options (`-c <key=value>`, `-C <dir>`).
+fn subcommand_index(args: &[OsString]) -> Option<usize> {
+    let mut i = 0;
+    while let Some(a) = args.get(i) {
         if a == "-c" || a == "-C" {
-            it.next();
-        } else if !a.to_string_lossy().starts_with('-') {
-            return Some(a);
+            i += 2;
+        } else if a.to_string_lossy().starts_with('-') {
+            i += 1;
+        } else {
+            return Some(i);
         }
     }
     None
 }
-
-type Version = (u32, u32);
 
 /// `(major, minor)` of the git at `exe`, from `git --version`, asked once per executable.
 fn version_of(exe: &Path) -> Option<Version> {
@@ -231,6 +248,29 @@ mod tests {
             ),
             "-c core.quotepath=false checkout -f HEAD -- a"
         );
+    }
+
+    #[test]
+    fn old_git_remote_rename_and_remove_lose_the_separator() {
+        assert_eq!(
+            adapt("remote rename -- origin up", (2, 35)),
+            "remote rename origin up"
+        );
+        let rename = "remote rename -- origin up";
+        assert_eq!(adapt(rename, (2, 36)), rename);
+        assert_eq!(adapt("remote rm -- origin", (2, 37)), "remote rm origin");
+        assert_eq!(
+            adapt("remote remove -- origin", (2, 34)),
+            "remote remove origin"
+        );
+        let rm = "remote rm -- origin";
+        assert_eq!(adapt(rm, (2, 38)), rm);
+        // `remote add` always accepted it.
+        let add = "remote add -- origin u";
+        assert_eq!(adapt(add, (2, 34)), add);
+        // A name that looks like an option must keep failing, not run as one.
+        let dash = "remote rm -- -v";
+        assert_eq!(adapt(dash, (2, 34)), dash);
     }
 
     #[test]
