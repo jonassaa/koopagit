@@ -202,15 +202,14 @@ impl Repo {
         let repo = self.gix();
         let mut tips: Vec<gix::ObjectId> = Vec::new();
         if options.all_branches {
+            // Every ref naming a commit, like the `--all` upstream passes.
             let platform = repo.references().map_err(Error::gix)?;
-            for prefix in ["refs/heads/", "refs/remotes/", "refs/tags/"] {
-                for r in platform.prefixed(prefix).map_err(Error::gix)?.flatten() {
-                    let mut r = r;
-                    if let Ok(id) = r.peel_to_id()
-                        && repo.find_commit(id).is_ok()
-                    {
-                        tips.push(id.detach());
-                    }
+            for r in platform.all().map_err(Error::gix)?.flatten() {
+                let mut r = r;
+                if let Ok(id) = r.peel_to_id()
+                    && repo.find_commit(id).is_ok()
+                {
+                    tips.push(id.detach());
                 }
             }
         }
