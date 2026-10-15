@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 koopagit-core.workspace = true
 koopagit-shell.workspace = true
 # Needed by the `#[implement]` macro.
-windows-core = "0.62"
+windows-core = "0.100"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
