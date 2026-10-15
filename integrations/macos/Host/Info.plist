@@ -20,7 +20,9 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<!-- No Dock icon while running menu actions; the help alert opts back in. -->
+	<!-- No Dock icon while running menu actions; the help alert opts back in,
+	     and so do koopagit-proc / koopagit-merge (platform::init), which share
+	     this Info.plist because they live in Contents/MacOS. -->
 	<key>LSUIElement</key>
 	<true/>
 	<key>LSMinimumSystemVersion</key>

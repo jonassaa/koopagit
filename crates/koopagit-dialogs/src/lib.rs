@@ -19,6 +19,7 @@ pub mod format;
 pub mod msgbox;
 pub mod osopen;
 pub mod pick;
+pub mod platform;
 pub mod progress;
 pub mod pullfetch;
 pub mod push;
