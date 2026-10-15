@@ -212,11 +212,11 @@ fn run(ctx: &mut Context, is_fetch: bool) -> DialogResult<i32> {
         let decision = decision.clone();
         let inputs = inputs.clone();
         dlg.on_ok(move || {
-            if let Some(d) = weak.upgrade() {
-                if let Some(dec) = on_ok(&d, &inputs) {
-                    *decision.borrow_mut() = Some(dec);
-                    let _ = d.hide();
-                }
+            if let Some(d) = weak.upgrade()
+                && let Some(dec) = on_ok(&d, &inputs)
+            {
+                *decision.borrow_mut() = Some(dec);
+                let _ = d.hide();
             }
         });
     }
@@ -228,10 +228,8 @@ fn run(ctx: &mut Context, is_fetch: bool) -> DialogResult<i32> {
         return Ok(1);
     };
     let ok = crate::progress::run(dec.job)?;
-    if ok {
-        if let Some(upstream) = dec.rebase_upstream {
-            rebase_after_fetch(&ctx.repo, &upstream);
-        }
+    if ok && let Some(upstream) = dec.rebase_upstream {
+        rebase_after_fetch(&ctx.repo, &upstream);
     }
     Ok(if ok { 0 } else { 1 })
 }

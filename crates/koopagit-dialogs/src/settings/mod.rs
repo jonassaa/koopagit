@@ -1617,10 +1617,8 @@ pub fn run(repo: Option<&Repo>, settings: Settings, inv: &Invocation) -> DialogR
             let ok = r.is_ok() && state.borrow().pending == Pending::None;
             report(r);
             refresh(false);
-            if ok {
-                if let Some(d) = weak.upgrade() {
-                    let _ = d.hide();
-                }
+            if ok && let Some(d) = weak.upgrade() {
+                let _ = d.hide();
             }
         });
     }

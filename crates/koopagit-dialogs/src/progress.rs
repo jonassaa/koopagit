@@ -123,10 +123,10 @@ impl OutputBuffer {
             for (j, part) in segment.split('\r').enumerate() {
                 if j > 0 {
                     self.overwrite_last = true;
-                    if !part.is_empty() {
-                        if let Some(last) = self.lines.last_mut() {
-                            last.clear();
-                        }
+                    if !part.is_empty()
+                        && let Some(last) = self.lines.last_mut()
+                    {
+                        last.clear();
                     }
                 }
                 if part.is_empty() {

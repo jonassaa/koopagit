@@ -1,0 +1,29 @@
+name: Differs from TortoiseGit
+description: A dialog, menu entry, option or workflow behaves differently from TortoiseGit, or is missing.
+labels: [parity]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        KoopaGit aims to match TortoiseGit. Features TortoiseGit doesn't have are out of scope.
+        Known, deliberate differences are listed in [docs/divergences.md](https://github.com/jonassaa/koopagit/blob/main/docs/divergences.md).
+  - type: input
+    id: feature
+    attributes:
+      label: Dialog or feature
+      placeholder: e.g. Log dialog → context menu → Cherry pick
+    validations:
+      required: true
+  - type: textarea
+    id: tortoisegit
+    attributes:
+      label: What TortoiseGit does
+      description: Link to the TortoiseGit docs or source if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: koopagit
+    attributes:
+      label: What KoopaGit does
+    validations:
+      required: true

@@ -206,10 +206,10 @@ impl Repo {
             for prefix in ["refs/heads/", "refs/remotes/", "refs/tags/"] {
                 for r in platform.prefixed(prefix).map_err(Error::gix)?.flatten() {
                     let mut r = r;
-                    if let Ok(id) = r.peel_to_id() {
-                        if repo.find_commit(id).is_ok() {
-                            tips.push(id.detach());
-                        }
+                    if let Ok(id) = r.peel_to_id()
+                        && repo.find_commit(id).is_ok()
+                    {
+                        tips.push(id.detach());
                     }
                 }
             }
@@ -254,10 +254,10 @@ impl Repo {
         for info in walk.all().map_err(Error::gix)? {
             let info = info.map_err(Error::gix)?;
             let id = info.id.to_string();
-            if let Some(filter) = &path_filter {
-                if !filter.contains(&id) {
-                    continue;
-                }
+            if let Some(filter) = &path_filter
+                && !filter.contains(&id)
+            {
+                continue;
             }
             let commit = info.object().map_err(Error::gix)?;
             let decoded = commit.decode().map_err(Error::gix)?;

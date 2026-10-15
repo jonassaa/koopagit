@@ -741,14 +741,13 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             let Some(d) = weak.upgrade() else { return };
             notice(&d, "", &[], false);
             if let Ask::SubmoduleUpdate(path) = std::mem::replace(&mut *ask.borrow_mut(), Ask::None)
+                && i == 0
             {
-                if i == 0 {
-                    spawn_launcher(
-                        &Invocation::new("subupdate")
-                            .with("bkpath", workdir.to_string_lossy())
-                            .with("selectedpath", path),
-                    );
-                }
+                spawn_launcher(
+                    &Invocation::new("subupdate")
+                        .with("bkpath", workdir.to_string_lossy())
+                        .with("selectedpath", path),
+                );
             }
         });
     }

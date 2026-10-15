@@ -677,11 +677,11 @@ pub fn ignore(ctx: &mut Context) -> DialogResult<i32> {
         let Some(rel) = ctx.repo.relative_path(p) else {
             continue;
         };
-        if let Some(entry) = fileops::ignore_entry(&rel, p.is_dir(), kind, file, only_mask) {
-            if let Err(e) = ctx.repo.apply_ignore(&entry) {
-                msgbox::error("KoopaGit", &format!("{} Open Failure\n{e}", entry.file));
-                return Ok(1);
-            }
+        if let Some(entry) = fileops::ignore_entry(&rel, p.is_dir(), kind, file, only_mask)
+            && let Err(e) = ctx.repo.apply_ignore(&entry)
+        {
+            msgbox::error("KoopaGit", &format!("{} Open Failure\n{e}", entry.file));
+            return Ok(1);
         }
         targets.push(rel);
     }

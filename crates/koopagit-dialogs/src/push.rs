@@ -516,13 +516,13 @@ fn try_ok(d: &PushDialog, state: &Rc<RefCell<State>>, snap: &Snapshot) {
         PostAction::on_success("Push...", launch("push")),
         PostAction::on_success("Switch/Checkout...", launch("switch")),
     ];
-    if snap.is_submodule {
-        if let Some(parent) = snap.workdir.parent() {
-            post.push(PostAction::on_success(
-                "Commit superproject...",
-                Invocation::new("commit").with_paths([parent.to_owned()]),
-            ));
-        }
+    if snap.is_submodule
+        && let Some(parent) = snap.workdir.parent()
+    {
+        post.push(PostAction::on_success(
+            "Commit superproject...",
+            Invocation::new("commit").with_paths([parent.to_owned()]),
+        ));
     }
     state.borrow_mut().job = Some(ProgressJob {
         title: snap.title.clone(),

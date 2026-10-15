@@ -599,15 +599,15 @@ impl Controller {
             &text,
             &["Yes", "No"],
             Box::new(move |i| {
-                if i == 0 {
-                    if let Ok(repo) = Repo::discover(&workdir) {
-                        let _ = repo
-                            .config_set_local(&format!("branch.{}.remote", o.local_branch), &o.url);
-                        let _ = repo.config_set_local(
-                            &format!("branch.{}.merge", o.local_branch),
-                            &format!("refs/heads/{}", o.remote_branch),
-                        );
-                    }
+                if i == 0
+                    && let Ok(repo) = Repo::discover(&workdir)
+                {
+                    let _ =
+                        repo.config_set_local(&format!("branch.{}.remote", o.local_branch), &o.url);
+                    let _ = repo.config_set_local(
+                        &format!("branch.{}.merge", o.local_branch),
+                        &format!("refs/heads/{}", o.remote_branch),
+                    );
                 }
                 resume();
             }),

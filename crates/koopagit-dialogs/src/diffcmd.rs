@@ -134,24 +134,24 @@ pub fn diff(ctx: Option<&Context>, inv: &Invocation) -> DialogResult<i32> {
 
     if let Some(path2) = inv.get("path2").map(|p| abs(Path::new(p))) {
         // Two repository paths at two revisions, else two files on disk.
-        if let (Some(ctx), Some(s), Some(e)) = (ctx, start, end) {
-            if let (Some(r1), Some(r2)) = (
+        if let (Some(ctx), Some(s), Some(e)) = (ctx, start, end)
+            && let (Some(r1), Some(r2)) = (
                 ctx.repo.relative_path(&path),
                 ctx.repo.relative_path(&path2),
-            ) {
-                let left = ctx.repo.extract_blob(s, &r1)?;
-                let right = ctx.repo.extract_blob(e, &r2)?;
-                start_diff(
-                    &settings,
-                    &left,
-                    &right,
-                    &rev_title(&ctx.repo, &r1, s),
-                    &rev_title(&ctx.repo, &r2, e),
-                    alternative,
-                    line,
-                );
-                return Ok(0);
-            }
+            )
+        {
+            let left = ctx.repo.extract_blob(s, &r1)?;
+            let right = ctx.repo.extract_blob(e, &r2)?;
+            start_diff(
+                &settings,
+                &left,
+                &right,
+                &rev_title(&ctx.repo, &r1, s),
+                &rev_title(&ctx.repo, &r2, e),
+                alternative,
+                line,
+            );
+            return Ok(0);
         }
         start_diff(
             &settings,

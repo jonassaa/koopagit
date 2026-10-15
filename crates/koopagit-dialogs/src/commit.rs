@@ -236,34 +236,34 @@ fn load_items(ctx: &Context, show_unversioned: bool, whole: bool, amend: bool) -
         .into_iter()
         .filter(|e| in_filter(&e.path) || e.staged.is_some())
         .collect();
-    if amend {
-        if let Ok(out) = ctx.repo.git().run([
+    if amend
+        && let Ok(out) = ctx.repo.git().run([
             "diff-tree",
             "--no-commit-id",
             "--name-status",
             "-r",
             "-z",
             "HEAD",
-        ]) {
-            let mut it = out.split('\0');
-            while let (Some(st), Some(path)) = (it.next(), it.next()) {
-                if path.is_empty() || entries.iter().any(|e| e.path == path) {
-                    continue;
-                }
-                let action = match st.chars().next() {
-                    Some('A') => Action::Added,
-                    Some('D') => Action::Deleted,
-                    _ => Action::Modified,
-                };
-                entries.push(StatusEntry {
-                    path: path.to_owned(),
-                    old_path: None,
-                    staged: Some(action),
-                    unstaged: None,
-                });
+        ])
+    {
+        let mut it = out.split('\0');
+        while let (Some(st), Some(path)) = (it.next(), it.next()) {
+            if path.is_empty() || entries.iter().any(|e| e.path == path) {
+                continue;
             }
-            entries.sort_by(|a, b| a.path.cmp(&b.path));
+            let action = match st.chars().next() {
+                Some('A') => Action::Added,
+                Some('D') => Action::Deleted,
+                _ => Action::Modified,
+            };
+            entries.push(StatusEntry {
+                path: path.to_owned(),
+                old_path: None,
+                staged: Some(action),
+                unstaged: None,
+            });
         }
+        entries.sort_by(|a, b| a.path.cmp(&b.path));
     }
     let select = ctx.settings.bool(keys::SELECT_FILES_FOR_COMMIT, true);
     let skip_missing = ctx.settings.bool(keys::AUTOSELECT_MISSING_FILES, false);

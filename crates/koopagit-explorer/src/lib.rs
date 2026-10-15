@@ -85,10 +85,10 @@ static LAST_STATUS: Mutex<Option<(PathBuf, Option<Overlay>)>> = Mutex::new(None)
 
 fn cached_overlay(path: &Path) -> Option<Overlay> {
     let mut last = LAST_STATUS.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((p, o)) = last.as_ref() {
-        if p == path {
-            return *o;
-        }
+    if let Some((p, o)) = last.as_ref()
+        && p == path
+    {
+        return *o;
     }
     let settings = OverlaySettings::from_settings(&Settings::load_default());
     let overlay = overlay_for_path(path, &settings);

@@ -1013,20 +1013,20 @@ pub fn run_blame(repo: &Repo, rel: &str, rev: Option<&str>, line: Option<usize>)
         let blame = blame.clone();
         dlg.on_selected(move |i| {
             let Some(d) = weak.upgrade() else { return };
-            if let Some(l) = blame.lines.get(i as usize) {
-                if let Some(c) = blame.commits.get(&l.commit) {
-                    d.set_status_text(
-                        format!(
-                            "{}  {} <{}>  {}  {}",
-                            &c.id[..c.id.len().min(8)],
-                            c.author,
-                            c.author_mail,
-                            crate::format::short_datetime(c.author_time, c.author_offset),
-                            c.summary
-                        )
-                        .into(),
-                    );
-                }
+            if let Some(l) = blame.lines.get(i as usize)
+                && let Some(c) = blame.commits.get(&l.commit)
+            {
+                d.set_status_text(
+                    format!(
+                        "{}  {} <{}>  {}  {}",
+                        &c.id[..c.id.len().min(8)],
+                        c.author,
+                        c.author_mail,
+                        crate::format::short_datetime(c.author_time, c.author_offset),
+                        c.summary
+                    )
+                    .into(),
+                );
             }
         });
     }

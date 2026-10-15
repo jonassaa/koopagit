@@ -38,10 +38,10 @@ fn stash_if_dirty(ctx: &Context, with_path: bool) -> Option<bool> {
 }
 
 fn ask_stash_pop(ctx: &Context) {
-    if msgbox::ask("KoopaGit", STASH_POP, &["Yes", "No"]) == Some(0) {
-        if let Err(e) = ctx.repo.git().run(["stash", "pop"]) {
-            msgbox::error("KoopaGit", &e.to_string());
-        }
+    if msgbox::ask("KoopaGit", STASH_POP, &["Yes", "No"]) == Some(0)
+        && let Err(e) = ctx.repo.git().run(["stash", "pop"])
+    {
+        msgbox::error("KoopaGit", &e.to_string());
     }
 }
 

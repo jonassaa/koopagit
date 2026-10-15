@@ -1107,10 +1107,10 @@ fn make_node(row: &Row, sel: &Selection, ms: &MenuSettings) -> Option<Node> {
             Action::Launch(inv)
         }
         S::SubmoduleBkPath => {
-            if flags & SUBMODULECONTAINER != 0 {
-                if let Some(f) = &sel.folder {
-                    inv = inv.with("bkpath", f.to_string_lossy());
-                }
+            if flags & SUBMODULECONTAINER != 0
+                && let Some(f) = &sel.folder
+            {
+                inv = inv.with("bkpath", f.to_string_lossy());
             }
             Action::Launch(inv)
         }
@@ -1121,10 +1121,10 @@ fn make_node(row: &Row, sel: &Selection, ms: &MenuSettings) -> Option<Node> {
             let mut args = Vec::new();
             if flags & PATCHFILE != 0 {
                 args.push(format!("/diff:{}", first.to_string_lossy()));
-                if flags & FOLDERINGIT != 0 {
-                    if let Some(f) = &sel.folder {
-                        args.push(format!("/patchpath:{}", f.to_string_lossy()));
-                    }
+                if flags & FOLDERINGIT != 0
+                    && let Some(f) = &sel.folder
+                {
+                    args.push(format!("/patchpath:{}", f.to_string_lossy()));
                 }
                 if flags & INVERSIONEDFOLDER != 0 {
                     args.push("/wc".to_owned());
@@ -1173,14 +1173,14 @@ fn ignore_submenu(row: &Row, sel: &Selection) -> Option<Node> {
             help: row.help.to_owned(),
             action: Action::Launch(base.clone()),
         });
-        if !item.is_dir() {
-            if let Some(ext) = item.extension() {
-                children.push(Node::Item {
-                    label: format!("*.{}", ext.to_string_lossy()),
-                    help: row.help.to_owned(),
-                    action: Action::Launch(base.with_switch("onlymask")),
-                });
-            }
+        if !item.is_dir()
+            && let Some(ext) = item.extension()
+        {
+            children.push(Node::Item {
+                label: format!("*.{}", ext.to_string_lossy()),
+                help: row.help.to_owned(),
+                action: Action::Launch(base.with_switch("onlymask")),
+            });
         }
     } else {
         let n = sel.items.len();

@@ -201,10 +201,10 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         upstreams.push("FETCH_HEAD".to_owned());
     }
     upstreams.extend(repo.tags()?);
-    if let Some(u) = inv.get("upstream").filter(|u| !u.is_empty()) {
-        if !upstreams.iter().any(|x| x == u) {
-            upstreams.push(u.to_owned());
-        }
+    if let Some(u) = inv.get("upstream").filter(|u| !u.is_empty())
+        && !upstreams.iter().any(|x| x == u)
+    {
+        upstreams.push(u.to_owned());
     }
 
     let dlg = RebaseDialog::new()?;
@@ -693,17 +693,17 @@ impl Ui {
             let Some((branch, upstream)) = self.selection() else {
                 return;
             };
-            if !self.state.borrow().hook_overridden {
-                if let Err(e) = crate::hookrun::pre_rebase(repo.workdir(), &upstream, &branch) {
-                    // IDS_HOOKFAILED_TASK2..4; "Abort" is the default.
-                    self.notice(
-                        Pending::HookFailed,
-                        &format!("Hook script failed\n{e}"),
-                        &["Abort", "Proceed anyway"],
-                        true,
-                    );
-                    return;
-                }
+            if !self.state.borrow().hook_overridden
+                && let Err(e) = crate::hookrun::pre_rebase(repo.workdir(), &upstream, &branch)
+            {
+                // IDS_HOOKFAILED_TASK2..4; "Abort" is the default.
+                self.notice(
+                    Pending::HookFailed,
+                    &format!("Hook script failed\n{e}"),
+                    &["Abort", "Proceed anyway"],
+                    true,
+                );
+                return;
             }
             let onto = d.get_onto_enabled() && !d.get_onto_text().trim().is_empty();
             if !onto
@@ -893,10 +893,10 @@ impl Ui {
         let workdir = self.state.borrow().workdir.clone();
         let out = Git::new(&workdir).output(["stash", "pop"]);
         self.state.borrow_mut().stashed = Stashed::No;
-        if let Ok(o) = out {
-            if !o.success() {
-                self.notice(Pending::None, o.stderr.trim(), &[], true);
-            }
+        if let Ok(o) = out
+            && !o.success()
+        {
+            self.notice(Pending::None, o.stderr.trim(), &[], true);
         }
     }
 

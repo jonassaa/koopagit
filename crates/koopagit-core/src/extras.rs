@@ -176,12 +176,14 @@ impl Repo {
         common_ancestor: bool,
     ) -> Result<Vec<ChangedFile>> {
         let mut base = rev1.to_owned();
-        if common_ancestor && !is_working_tree(rev1) && !is_working_tree(rev2) {
-            if let Ok(mb) = self.git().run(["merge-base", rev1, rev2]) {
-                let mb = mb.trim();
-                if !mb.is_empty() {
-                    base = mb.to_owned();
-                }
+        if common_ancestor
+            && !is_working_tree(rev1)
+            && !is_working_tree(rev2)
+            && let Ok(mb) = self.git().run(["merge-base", rev1, rev2])
+        {
+            let mb = mb.trim();
+            if !mb.is_empty() {
+                base = mb.to_owned();
             }
         }
         if is_working_tree(&base) || is_working_tree(rev2) {

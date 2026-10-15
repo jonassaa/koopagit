@@ -529,10 +529,10 @@ impl Actions {
     /// Closes with `full` as the picked ref (`m_pickedRef`), written to
     /// `/outfile` in picker mode.
     fn pick(&self, full: &str) {
-        if let Some(file) = &self.outfile {
-            if let Err(e) = std::fs::write(file, format!("{full}\n")) {
-                eprintln!("koopagit: {e}");
-            }
+        if let Some(file) = &self.outfile
+            && let Err(e) = std::fs::write(file, format!("{full}\n"))
+        {
+            eprintln!("koopagit: {e}");
         }
         self.close();
     }
