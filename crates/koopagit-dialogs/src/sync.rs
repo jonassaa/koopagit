@@ -724,10 +724,7 @@ impl Controller {
             let git = koopagit_core::git_cli::Git::new(&workdir);
             let mut ok = true;
             for args in &commands {
-                output
-                    .lock()
-                    .unwrap()
-                    .push_line(&format!("git {}", args.join(" ")));
+                output.lock().unwrap().push_line(&git.command_line(args));
                 push_text(&weak, &output);
                 let mut cmd = git.command(args);
                 cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
