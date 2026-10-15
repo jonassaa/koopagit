@@ -34,8 +34,14 @@ once, when it needs them):
 irm https://raw.githubusercontent.com/jonassaa/koopagit/main/install.ps1 | iex
 ```
 
-The installer is a wizard. It checks each prerequisite and asks before it
-installs anything:
+The installer is a full-screen wizard with a progress bar: **Check →
+Setup → Prepare → Build → Install → Finish**. After checking your system it
+shows the recommended setup. Press Enter to install with it, or choose
+**Customize...** to pick the install location, where the `koopagit` command
+goes, the file-manager integration and PATH changes yourself. Use the arrow
+keys (or the item's number) to choose, and Enter to confirm.
+
+The prerequisites it installs when they're missing:
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
@@ -49,13 +55,18 @@ minutes), installs it, and checks that the result works. It also offers to
 set your git name and email if they're missing, like TortoiseGit's
 first-start wizard does.
 
-What you get:
+The recommended setup, and the install locations **Customize...** offers:
 
-| | Installed to | File manager |
-|---|---|---|
-| macOS | `/Applications/KoopaGit.app` (or `~/Applications`), `koopagit` command in `~/.local/bin` | Finder extension, enabled for you; Finder restarts |
-| Linux | `~/.cargo/bin`, `koopagit` command in `~/.local/bin` | Nautilus extension and emblems; log out and back in once |
-| Windows | `C:\Program Files\KoopaGit`, `koopagit` command on your `PATH` | Explorer extension only if you say yes (experimental, see [Windows](#windows)) |
+| | Recommended install location | Other locations | File manager |
+|---|---|---|---|
+| macOS | `/Applications/KoopaGit.app`, `koopagit` command in `~/.local/bin` | `~/Applications` (only for you), any folder | Finder extension, enabled for you; Finder restarts |
+| Linux | `~/.cargo/bin` (set by cargo; change with `CARGO_HOME`), `koopagit` command in `~/.local/bin` | command: `/usr/local/bin`, any folder, or none | Nautilus extension and emblems; log out and back in once |
+| Windows | `C:\Program Files\KoopaGit` (asks for admin rights), added to your `PATH` | `%LOCALAPPDATA%\Programs\KoopaGit` (only for you, no admin rights), any folder | Explorer extension off by default (experimental, see [Windows](#windows)) |
+
+An existing installation is updated where it is. The build's output goes to
+a log file (`~/Library/Logs/KoopaGit/install.log`,
+`~/.local/state/koopagit/install.log`, or `%LOCALAPPDATA%\KoopaGit\install.log`);
+if a step fails, the wizard shows the end of the log.
 
 If Finder doesn't show KoopaGit, turn it on in **System Settings → General →
 Login Items & Extensions → Finder**. To limit Finder's badges and menus to
@@ -84,7 +95,7 @@ options. The installer then builds that clone instead of downloading one.
 |---|---|
 | `--check` / `-Check` | Report what's installed and what's missing |
 | `--uninstall` / `-Uninstall` | Remove KoopaGit (asks before deleting your settings) |
-| `--yes` / `-Yes` | Accept every default without asking |
+| `--yes` / `-Yes` | Install with the recommended setup without asking |
 | `-Explorer` (Windows only) | Register the Explorer extension without asking |
 | `-Dest <folder>` (Windows only) | Install somewhere other than `C:\Program Files\KoopaGit` |
 
