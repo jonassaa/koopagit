@@ -388,18 +388,17 @@ export component LogDialog inherits KoopaWindow {
                                         border-radius: row.wc || row.merge ? 0px : self.width / 2;
                                         background: row.wc ? #d73a49 : root.lane-color(mod(row.node, 8));
                                     }
-                                    // Modern nodes: a ring in the list surface cuts the lines; merges
+                                    // Modern nodes sit on the lines without cutting them; merges
                                     // and the working tree are hollow, HEAD is drawn larger.
                                     if Theme.modern: Rectangle {
                                         x: row.node * root.lane-width + (root.lane-width - self.width) / 2;
                                         y: (root.row-height - self.height) / 2;
-                                        width: row.is-head ? root.graph-node-size + 6px
-                                            : row.merge || row.wc ? root.graph-node-size : root.graph-node-size + 4px;
+                                        width: row.is-head ? root.graph-node-size + 4px
+                                            : row.merge || row.wc ? root.graph-node-size : root.graph-node-size + 2px;
                                         height: self.width;
                                         border-radius: self.width / 2;
                                         border-width: 2px;
-                                        border-color: row.wc ? Theme.disabled
-                                            : row.merge && !row.is-head ? root.lane-color(mod(row.node, 8)) : Theme.surface;
+                                        border-color: row.wc ? Theme.disabled : root.lane-color(mod(row.node, 8));
                                         background: row.wc || (row.merge && !row.is-head) ? Theme.surface : root.lane-color(mod(row.node, 8));
                                     }
                                 }

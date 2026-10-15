@@ -43,16 +43,21 @@ const LANE_COLORS: usize = 8;
 const BRANCH_LINE_DEFAULTS: [u32; LANE_COLORS] =
     [0, 255, 65280, 16711680, 8421504, 32896, 8421376, 8388736];
 
-/// Path commands for one graph row (lane width 16, `row_height` px), grouped
-/// by lane colour. A line takes the colour of the lane it occupies at the row
-/// edge. As in upstream's `paintGraphLane`, a branch leaves or joins the node
-/// along a horizontal line that bends into its lane with a quarter-ellipse
-/// arc; a lane shifting sideways away from the node is an S-curve.
+/// Path commands for one graph row (lane width 16, `row_height` px), in
+/// drawing order and grouped by lane colour. A line takes the colour of the
+/// lane it occupies at the row edge. As in upstream's `paintGraphLane`, a
+/// branch leaves or joins the node along a horizontal line that bends into its
+/// lane with a quarter-ellipse arc; every other line runs straight down its
+/// lane. Arcs to farther lanes are drawn first so each nearer arc keeps its
+/// colour up to the node, and straight lanes last so they stay unbroken where
+/// a horizontal crosses them.
 pub fn graph_paths(row: &GraphRow, row_height: f32) -> Vec<(usize, String)> {
     let x = |lane: usize| lane as f32 * LANE + LANE / 2.0;
     let mid = row_height / 2.0;
+    let mut lines = row.lines.clone();
+    lines.sort_by_key(|l| (l.from == l.to, std::cmp::Reverse(l.from.abs_diff(l.to))));
     let mut paths: Vec<(usize, String)> = Vec::new();
-    for l in &row.lines {
+    for l in &lines {
         let (edge, inner, ye) = if l.upper {
             (l.from, l.to, 0.0)
         } else {
@@ -61,7 +66,7 @@ pub fn graph_paths(row: &GraphRow, row_height: f32) -> Vec<(usize, String)> {
         let (xe, xi) = (x(edge), x(inner));
         let cmd = if edge == inner {
             format!("M {xi} {mid} L {xe} {ye} ")
-        } else if inner == row.node {
+        } else {
             let dir = if xe > xi { 1.0 } else { -1.0 };
             let xa = xe - dir * LANE / 2.0;
             format!(
@@ -69,14 +74,11 @@ pub fn graph_paths(row: &GraphRow, row_height: f32) -> Vec<(usize, String)> {
                 xa + dir * KAPPA * LANE / 2.0,
                 ye + (mid - ye) * KAPPA,
             )
-        } else {
-            let yc = (mid + ye) / 2.0;
-            format!("M {xi} {mid} C {xi} {yc} {xe} {yc} {xe} {ye} ")
         };
         let color = edge % LANE_COLORS;
-        match paths.iter_mut().find(|(c, _)| *c == color) {
-            Some((_, p)) => p.push_str(&cmd),
-            None => paths.push((color, cmd)),
+        match paths.last_mut() {
+            Some((c, p)) if *c == color => p.push_str(&cmd),
+            _ => paths.push((color, cmd)),
         }
     }
     paths
@@ -1557,21 +1559,25 @@ mod tests {
     #[test]
     fn graph_paths_curve_into_lanes() {
         let line = |from, to, upper| GraphLine { from, to, upper };
-        // Node in lane 0 forking to lane 1, with lane 2 shifting into lane 1.
+        // Node in lane 0 forking to lane 1; lane 2 converges into the node.
         let row = GraphRow {
             node: 0,
-            lines: vec![line(0, 0, true), line(0, 1, false), line(2, 1, false)],
+            lines: vec![line(0, 0, true), line(2, 0, true), line(0, 1, false)],
             width: 3,
         };
         let paths = graph_paths(&row, ROW);
-        assert_eq!(paths[0], (0, "M 8 11 L 8 0 ".to_string()));
-        // Horizontal to the lane boundary, then a quarter ellipse down into lane 1.
+        // Farthest first: horizontal to the lane boundary, then a quarter
+        // ellipse up into lane 2.
+        assert_eq!(paths[0].0, 2);
+        assert!(paths[0].1.starts_with("M 8 11 L 32 11 C 36.41"));
+        assert!(paths[0].1.ends_with(" 40 0 "));
+        // ... then down into lane 1.
         assert_eq!(paths[1].0, 1);
         assert!(paths[1].1.starts_with("M 8 11 L 16 11 C 20.41"));
         assert!(paths[1].1.contains(" 24 15.92"));
-        // Away from the node: an S-curve, joined into the same colour group.
-        assert!(paths[1].1.ends_with("M 40 11 C 40 16.5 24 16.5 24 22 "));
-        assert_eq!(paths.len(), 2);
+        // Straight lines on top.
+        assert_eq!(paths[2], (0, "M 8 11 L 8 0 ".to_string()));
+        assert_eq!(paths.len(), 3);
         assert!(graph_paths(&GraphRow::default(), ROW).is_empty());
     }
 
