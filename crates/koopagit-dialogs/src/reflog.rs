@@ -245,12 +245,11 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         dlg.on_ok(move || {
             if let Some(file) = &outfile {
                 let rows = a.sel.sel.borrow().to_vec();
-                if let [row] = rows.as_slice() {
-                    if let Some(e) = a.entries(&[*row]).first() {
-                        if let Err(err) = std::fs::write(file, format!("{}\n", e.id)) {
-                            eprintln!("koopagit: {err}");
-                        }
-                    }
+                if let [row] = rows.as_slice()
+                    && let Some(e) = a.entries(&[*row]).first()
+                    && let Err(err) = std::fs::write(file, format!("{}\n", e.id))
+                {
+                    eprintln!("koopagit: {err}");
                 }
             }
             if let Some(d) = weak.upgrade() {

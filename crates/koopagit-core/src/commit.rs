@@ -226,10 +226,9 @@ impl Repo {
         if let Ok(t) = self
             .git()
             .run(["config", "--path", "--get", "commit.template"])
+            && let Ok(text) = std::fs::read_to_string(t.trim())
         {
-            if let Ok(text) = std::fs::read_to_string(t.trim()) {
-                msg = text;
-            }
+            msg = text;
         }
         for f in ["SQUASH_MSG", "MERGE_MSG"] {
             if let Ok(text) = std::fs::read_to_string(self.git_dir().join(f)) {

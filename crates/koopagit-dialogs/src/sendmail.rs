@@ -139,10 +139,10 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
         .collect();
     let model = Rc::new(VecModel::from(rows));
     dlg.set_patches(ModelRc::from(model.clone()));
-    if let [only] = patches.as_slice() {
-        if let Ok(t) = std::fs::read_to_string(only) {
-            dlg.set_subject(misccmds::parse_patch(&t).subject.into());
-        }
+    if let [only] = patches.as_slice()
+        && let Ok(t) = std::fs::read_to_string(only)
+    {
+        dlg.set_subject(misccmds::parse_patch(&t).subject.into());
     }
     let via_mailto = delivery == Delivery::Mapi || !has_send_email(ctx);
     dlg.set_delivery_note(

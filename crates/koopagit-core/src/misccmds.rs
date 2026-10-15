@@ -214,10 +214,10 @@ pub fn proxy_url(enabled: bool, host: &str, port: &str, user: &str, pass: &str) 
         url.push('@');
     }
     url.push_str(host);
-    if let Ok(p) = port.trim().parse::<u16>() {
-        if p != 0 {
-            url.push_str(&format!(":{p}"));
-        }
+    if let Ok(p) = port.trim().parse::<u16>()
+        && p != 0
+    {
+        url.push_str(&format!(":{p}"));
     }
     Some(url)
 }

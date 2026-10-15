@@ -1,5 +1,8 @@
 # KoopaGit
 
+[![CI](https://github.com/jonassaa/koopagit/actions/workflows/ci.yml/badge.svg)](https://github.com/jonassaa/koopagit/actions/workflows/ci.yml)
+[![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+
 A clone of [TortoiseGit](https://tortoisegit.org/) written in Rust that runs on
 Windows, macOS and Linux. It adds file-manager context menus and status icons,
 and has the same dialogs as TortoiseGit: Commit, Log, Diff, Merge, Rebase,
@@ -18,7 +21,7 @@ conflict viewer.
 
 ## Requirements (all platforms)
 
-- **Rust 1.85 or newer**, installed with [rustup](https://rustup.rs/).
+- **Rust 1.92 or newer**, installed with [rustup](https://rustup.rs/).
 - **Git** on `PATH`. KoopaGit runs `git` for every operation that changes a
   repository. To use a different binary, set `KOOPAGIT_GIT=/path/to/git`.
 
@@ -215,3 +218,15 @@ cargo test
 The crate layout and the shell-extension flow are described in
 [docs/architecture.md](docs/architecture.md). Deliberate differences from
 TortoiseGit are listed in [docs/divergences.md](docs/divergences.md).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request, and
+[SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## License
+
+KoopaGit is free software: you can redistribute it and/or modify it under the
+terms of the [GNU General Public License](LICENSE), version 3 or (at your
+option) any later version.
+
+KoopaGit is not affiliated with the TortoiseGit project. It reimplements
+TortoiseGit's behaviour, and TortoiseGit is also licensed under the GPL.

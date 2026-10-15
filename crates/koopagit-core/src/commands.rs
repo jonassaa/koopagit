@@ -277,10 +277,10 @@ pub fn switch(o: &SwitchOptions) -> Vec<String> {
 pub fn switch_default_branch_name(version: &str, remotes: &[String]) -> (String, bool) {
     let rest = version.strip_prefix("remotes/").unwrap_or(version);
     for r in remotes {
-        if let Some(b) = rest.strip_prefix(&format!("{r}/")) {
-            if version.starts_with("remotes/") || r == "origin" {
-                return (b.to_owned(), true);
-            }
+        if let Some(b) = rest.strip_prefix(&format!("{r}/"))
+            && (version.starts_with("remotes/") || r == "origin")
+        {
+            return (b.to_owned(), true);
         }
     }
     (format!("Branch_{version}"), false)
@@ -358,14 +358,14 @@ pub fn merge(o: &MergeOptions) -> Vec<String> {
     }
     if let Some(st) = &o.strategy {
         a.push(format!("--strategy={st}"));
-        if st == "recursive" {
-            if let Some(opt) = &o.strategy_option {
-                match (&o.strategy_param, opt.as_str()) {
-                    (Some(p), "rename-threshold" | "subtree") => {
-                        a.push(format!("--strategy-option={opt}={p}"))
-                    }
-                    _ => a.push(format!("--strategy-option={opt}")),
+        if st == "recursive"
+            && let Some(opt) = &o.strategy_option
+        {
+            match (&o.strategy_param, opt.as_str()) {
+                (Some(p), "rename-threshold" | "subtree") => {
+                    a.push(format!("--strategy-option={opt}={p}"))
                 }
+                _ => a.push(format!("--strategy-option={opt}")),
             }
         }
     }

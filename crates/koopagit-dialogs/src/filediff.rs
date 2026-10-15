@@ -512,10 +512,10 @@ impl FileDiffMenu {
         }
         // Ctrl+C / Ctrl+Insert: `CopySelectionToClipboard()` (paths), with or without Shift.
         bridge.on_copy(move |_, _| {
-            if let Some(m) = me.upgrade() {
-                if !m.sel.borrow().is_empty() {
-                    m.run(FileDiffAction::CopyPaths);
-                }
+            if let Some(m) = me.upgrade()
+                && !m.sel.borrow().is_empty()
+            {
+                m.run(FileDiffAction::CopyPaths);
             }
         });
     }

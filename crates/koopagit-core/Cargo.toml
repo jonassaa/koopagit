@@ -4,6 +4,8 @@ description = "Git/domain core for KoopaGit: no GUI or OS-integration dependenci
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 gix = { version = "0.89", default-features = false, features = ["sha1", "status", "revision", "max-performance-safe"] }

@@ -68,11 +68,11 @@ pub fn submodule_add(ctx: &mut Context) -> DialogResult<i32> {
         let weak = dlg.as_weak();
         let start = workdir.parent().map(Path::to_owned);
         dlg.on_browse_repository(move || {
-            if let Some(d) = weak.upgrade() {
-                if let Some(p) = crate::pick::folder("Repository", start.as_deref()) {
-                    d.set_repository(p.to_string_lossy().as_ref().into());
-                    d.invoke_repository_edited();
-                }
+            if let Some(d) = weak.upgrade()
+                && let Some(p) = crate::pick::folder("Repository", start.as_deref())
+            {
+                d.set_repository(p.to_string_lossy().as_ref().into());
+                d.invoke_repository_edited();
             }
         });
     }
@@ -80,14 +80,14 @@ pub fn submodule_add(ctx: &mut Context) -> DialogResult<i32> {
         let weak = dlg.as_weak();
         let workdir = workdir.clone();
         dlg.on_browse_path(move || {
-            if let Some(d) = weak.upgrade() {
-                if let Some(p) = crate::pick::folder("Path", Some(&workdir)) {
-                    let rel = p
-                        .strip_prefix(&workdir)
-                        .map(|r| r.to_string_lossy().replace('\\', "/"))
-                        .unwrap_or_else(|_| p.to_string_lossy().into_owned());
-                    d.set_path(rel.into());
-                }
+            if let Some(d) = weak.upgrade()
+                && let Some(p) = crate::pick::folder("Path", Some(&workdir))
+            {
+                let rel = p
+                    .strip_prefix(&workdir)
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_else(|_| p.to_string_lossy().into_owned());
+                d.set_path(rel.into());
             }
         });
     }

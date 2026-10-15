@@ -140,10 +140,10 @@ pub fn simplify(mut nodes: Vec<RgNode>, o: &RgOptions) -> Vec<RgNode> {
         let id = n.id.clone();
         skip.insert(id.clone());
         nodes[ci].parents[0] = parent.clone();
-        if let Some(pc) = children.get_mut(&parent) {
-            if let Some(slot) = pc.iter_mut().find(|c| **c == id) {
-                *slot = child_id.clone();
-            }
+        if let Some(pc) = children.get_mut(&parent)
+            && let Some(slot) = pc.iter_mut().find(|c| **c == id)
+        {
+            *slot = child_id.clone();
         }
         children.remove(&id);
     }

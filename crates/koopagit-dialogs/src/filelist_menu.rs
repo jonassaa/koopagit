@@ -367,16 +367,17 @@ pub fn build(sel: &[RowInfo], focused: &RowInfo, mask: PopMask, info: &ListInfo)
         if !wt && mask.allows(A::RevertToRev) && !has(st::DEL) {
             m.item(A::RevertToRev, "Revert to this revision");
         }
-        if !wt && mask.allows(A::RevertToParent) {
-            if let Some((subject, short)) = &info.parent_title {
-                m.item(
-                    A::RevertToParent,
-                    format!(
-                        "Revert to parent revision: \"{}\" ({short})",
-                        short_subject(subject)
-                    ),
-                );
-            }
+        if !wt
+            && mask.allows(A::RevertToParent)
+            && let Some((subject, short)) = &info.parent_title
+        {
+            m.item(
+                A::RevertToParent,
+                format!(
+                    "Revert to parent revision: \"{}\" ({short})",
+                    short_subject(subject)
+                ),
+            );
         }
     }
 
@@ -445,10 +446,10 @@ pub fn build(sel: &[RowInfo], focused: &RowInfo, mask: PopMask, info: &ListInfo)
             if !first_ext.is_empty() {
                 children.push(leaf(A::IgnoreMask, format!("*{first_ext}"), true));
             }
-            if n == 1 {
-                if let Some((dir, _)) = sel[0].path.rsplit_once('/') {
-                    children.push(leaf(A::IgnoreFolder, dir.to_owned(), true));
-                }
+            if n == 1
+                && let Some((dir, _)) = sel[0].path.rsplit_once('/')
+            {
+                children.push(leaf(A::IgnoreFolder, dir.to_owned(), true));
             }
             m.sub("Add to ignore list", children);
         } else {

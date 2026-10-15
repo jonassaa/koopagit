@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in KoopaGit is broken or crashes.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Right-click a modified file in a repository
+        2. Choose KoopaGit → Commit…
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Finder)
+        - Linux (Nautilus)
+        - Windows (Explorer)
+        - Command line only
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: OS version, `git --version`, and the KoopaGit commit you built from.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or screenshots
+      description: Error messages, terminal output, or screenshots of the dialog.
+      render: text

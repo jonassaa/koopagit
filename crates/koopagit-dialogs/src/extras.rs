@@ -457,19 +457,19 @@ pub fn firststart(repo: Option<&Repo>, mut settings: Settings) -> DialogResult<i
             .get(dlg.get_ssh_index().max(0) as usize)
             .map(|(_, v)| *v)
             .unwrap_or("");
-        if ssh_value != current_ssh {
-            if let Err(e) = global_config("core.sshCommand", ssh_value) {
-                errors.push(e);
-            }
+        if ssh_value != current_ssh
+            && let Err(e) = global_config("core.sshCommand", ssh_value)
+        {
+            errors.push(e);
         }
         let helper = helpers
             .get(dlg.get_credential_index().max(0) as usize)
             .copied()
             .unwrap_or("");
-        if helper != current_helper {
-            if let Err(e) = global_config("credential.helper", helper) {
-                errors.push(e);
-            }
+        if helper != current_helper
+            && let Err(e) = global_config("credential.helper", helper)
+        {
+            errors.push(e);
         }
     }
     if !errors.is_empty() {

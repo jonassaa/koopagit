@@ -413,10 +413,10 @@ pub fn branch_tag(ctx: &mut Context, is_tag: bool) -> DialogResult<i32> {
         let weak = dlg.as_weak();
         let last_default = last_default.clone();
         dlg.on_name_edited(move || {
-            if let Some(d) = weak.upgrade() {
-                if d.get_name().as_str() != last_default.borrow().as_str() {
-                    d.set_track(0);
-                }
+            if let Some(d) = weak.upgrade()
+                && d.get_name().as_str() != last_default.borrow().as_str()
+            {
+                d.set_track(0);
             }
         });
     }

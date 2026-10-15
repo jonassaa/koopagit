@@ -55,10 +55,10 @@ pub fn pick_diff_tool(s: &Settings, file1: &Path, file2: &Path, alternative: boo
     if value.is_empty() {
         value = key(&file_name_lower(file1));
     }
-    if value.is_empty() {
-        if let Some(ext) = ext_lower(file2) {
-            value = key(&ext);
-        }
+    if value.is_empty()
+        && let Some(ext) = ext_lower(file2)
+    {
+        value = key(&ext);
     }
     if value.is_empty() {
         value = s.string("Diff", "");

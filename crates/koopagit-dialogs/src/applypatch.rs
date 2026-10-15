@@ -466,11 +466,11 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                 }
                 Ask::AmActiveOnCancel => match i {
                     0 => {
-                        if let Ok(o) = git.output(extras::am_control_args(AmControl::Abort)) {
-                            if !o.success() {
-                                notice(&d, &o.stderr, &[], true);
-                                return;
-                            }
+                        if let Ok(o) = git.output(extras::am_control_args(AmControl::Abort))
+                            && !o.success()
+                        {
+                            notice(&d, &o.stderr, &[], true);
+                            return;
                         }
                         let _ = d.hide();
                     }

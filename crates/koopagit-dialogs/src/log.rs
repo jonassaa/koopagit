@@ -632,19 +632,19 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
             let mut st = state.borrow_mut();
             for r in 0..rows_model.row_count() {
                 let want = st.sel.contains(r);
-                if let Some(mut row) = rows_model.row_data(r) {
-                    if row.selected != want {
-                        row.selected = want;
-                        rows_model.set_row_data(r, row);
-                    }
+                if let Some(mut row) = rows_model.row_data(r)
+                    && row.selected != want
+                {
+                    row.selected = want;
+                    rows_model.set_row_data(r, row);
                 }
             }
             let current = st.sel.current();
             d.set_current_row(current.map_or(-1, |c| c as i32));
-            if let Some(c) = current {
-                if st.history.last() != Some(&c) {
-                    st.history.push(c);
-                }
+            if let Some(c) = current
+                && st.history.last() != Some(&c)
+            {
+                st.history.push(c);
             }
             let Some(e) = current.and_then(|c| st.entry(c).cloned()) else {
                 d.set_details("".into());
@@ -756,10 +756,8 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                 d.set_loading(false);
                 match result {
                     Ok((mut entries, head, repo_state, user)) => {
-                        if with_wc {
-                            if let Some(h) = &head {
-                                entries.insert(0, wc_entry(h, &user.0, &user.1));
-                            }
+                        if with_wc && let Some(h) = &head {
+                            entries.insert(0, wc_entry(h, &user.0, &user.1));
                         }
                         {
                             let mut st = state.borrow_mut();
@@ -1339,10 +1337,10 @@ pub fn run(ctx: &mut Context) -> DialogResult<i32> {
                     .filter_map(|r| st.entry(r))
                     .map(|e| e.id.clone())
                     .find(|id| !id.is_empty() && id.chars().any(|c| c != '0'));
-                if let Some(id) = picked {
-                    if let Err(e) = std::fs::write(file, format!("{id}\n")) {
-                        eprintln!("koopagit: {e}");
-                    }
+                if let Some(id) = picked
+                    && let Err(e) = std::fs::write(file, format!("{id}\n"))
+                {
+                    eprintln!("koopagit: {e}");
                 }
             }
             if let Some(d) = weak.upgrade() {

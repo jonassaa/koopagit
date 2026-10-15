@@ -97,10 +97,10 @@ pub fn new_worktree(ctx: &mut Context, target: Option<String>) -> DialogResult<i
     {
         let weak = dlg.as_weak();
         dlg.on_detach_toggled(move || {
-            if let Some(d) = weak.upgrade() {
-                if d.get_detach() {
-                    d.set_new_branch(false);
-                }
+            if let Some(d) = weak.upgrade()
+                && d.get_detach()
+            {
+                d.set_new_branch(false);
             }
         });
     }
@@ -492,10 +492,10 @@ pub fn list(ctx: &mut Context) -> DialogResult<i32> {
                 post_actions: Vec::new(),
                 close_on_end: CloseOnEnd::Manual,
             };
-            if let Err(e) = crate::progress::start(job, move |_| reload()) {
-                if let Some(d) = weak.upgrade() {
-                    notice(&d, &e.to_string(), &[], true);
-                }
+            if let Err(e) = crate::progress::start(job, move |_| reload())
+                && let Some(d) = weak.upgrade()
+            {
+                notice(&d, &e.to_string(), &[], true);
             }
         });
     }

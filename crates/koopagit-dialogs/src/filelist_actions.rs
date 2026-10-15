@@ -465,15 +465,16 @@ impl FileListMenu {
     fn row_info(&self, repo: Option<&Repo>, item: &Item) -> RowInfo {
         let env = self.env.borrow();
         let mut flags = fm::status_flags(item.entry.action());
-        if env.current_version.is_none() && flags & (st::UNV | st::IGN) == 0 {
-            if let Some(repo) = repo {
-                let (assume, skip) = repo.index_flags(env.workdir.join(&item.entry.path));
-                if assume {
-                    flags |= st::ASSUMEVALID;
-                }
-                if skip {
-                    flags |= st::SKIPWORKTREE;
-                }
+        if env.current_version.is_none()
+            && flags & (st::UNV | st::IGN) == 0
+            && let Some(repo) = repo
+        {
+            let (assume, skip) = repo.index_flags(env.workdir.join(&item.entry.path));
+            if assume {
+                flags |= st::ASSUMEVALID;
+            }
+            if skip {
+                flags |= st::SKIPWORKTREE;
             }
         }
         RowInfo {
@@ -603,10 +604,10 @@ impl FileListMenu {
     ) {
         let me = self.me.borrow().clone();
         msgbox::ask_async_default("KoopaGit", text, buttons, default, move |a| {
-            if a == Some(0) {
-                if let Some(m) = me.upgrade() {
-                    then(&m);
-                }
+            if a == Some(0)
+                && let Some(m) = me.upgrade()
+            {
+                then(&m);
             }
         });
     }
@@ -1151,10 +1152,10 @@ fn trash_copies(files: &[PathBuf]) {
     for f in files {
         let Some(name) = f.file_name() else { continue };
         let target = dir.join(copies.len().to_string()).join(name);
-        if let Some(p) = target.parent() {
-            if std::fs::create_dir_all(p).is_err() {
-                continue;
-            }
+        if let Some(p) = target.parent()
+            && std::fs::create_dir_all(p).is_err()
+        {
+            continue;
         }
         if std::fs::copy(f, &target).is_ok() {
             copies.push(target);
