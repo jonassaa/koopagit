@@ -103,6 +103,10 @@ pub fn ask_with_check(
 ) -> (Option<usize>, bool) {
     let Ok(dlg) = MessageBox::new() else {
         eprintln!("{title}: {text}");
+        #[cfg(target_os = "linux")]
+        if let Some(hint) = crate::platform::linux::hint(text) {
+            eprintln!("{hint}");
+        }
         return (None, false);
     };
     configure(&dlg, title, text, buttons, default);

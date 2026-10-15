@@ -45,6 +45,7 @@ The wizards install these prerequisites when they're missing, after asking:
 | | macOS | Linux | Windows |
 |---|---|---|---|
 | Build tools | Xcode command-line tools | C compiler, pkg-config, fontconfig headers (apt / dnf / pacman) | Visual Studio 2022 Build Tools, C++ workload (winget) |
+| GUI libraries | built in | X11, Wayland, xkbcommon and OpenGL libraries (apt / dnf / pacman) | built in |
 | Git | with the command-line tools | system package | Git for Windows (winget) |
 | Rust 1.92+ | rustup | rustup | rustup |
 | File manager | Finder Sync extension | nautilus-python 4.x (if Nautilus 43+ is installed) | Explorer extension (experimental, off by default) |
@@ -117,16 +118,27 @@ killall Finder
 The extension needs nautilus-python 4.x, which means Nautilus 43 or newer.
 That is Ubuntu 23.04+, Debian 12+, Fedora 37+ or a current Arch.
 
-**1. Install build tools and the Nautilus Python bindings:**
+**1. Install build tools, the libraries the dialogs open windows with, and the
+Nautilus Python bindings:**
 
 ```sh
 # Debian / Ubuntu
-sudo apt install build-essential pkg-config libfontconfig-dev git python3-nautilus
+sudo apt install build-essential pkg-config libfontconfig-dev git python3-nautilus \
+    libxkbcommon0 libxkbcommon-x11-0 libx11-6 libx11-xcb1 libxcursor1 libxrandr2 libxi6 \
+    libwayland-client0 libwayland-cursor0 libwayland-egl1 libegl1 libgl1
 # Fedora
-sudo dnf install gcc pkgconf-pkg-config fontconfig-devel git nautilus-python
+sudo dnf install gcc pkgconf-pkg-config fontconfig-devel git nautilus-python \
+    libxkbcommon libxkbcommon-x11 libX11 libX11-xcb libXcursor libXrandr libXi \
+    libwayland-client libwayland-cursor libwayland-egl mesa-libEGL mesa-libGL
 # Arch
-sudo pacman -S --needed base-devel fontconfig git python-nautilus
+sudo pacman -S --needed base-devel fontconfig git python-nautilus \
+    libxkbcommon libxkbcommon-x11 libx11 libxcursor libxrandr libxi wayland libglvnd
 ```
+
+A desktop install usually has the GUI libraries already. Minimal systems such
+as Ubuntu on WSL don't, and the dialogs then stop with
+`libxkbcommon-x11.so is not installed`. The dialogs run under WSLg on Windows
+11; leave out `python3-nautilus` there if you don't use Nautilus.
 
 **2. Build and install the binaries** (into `~/.cargo/bin`):
 

@@ -196,9 +196,9 @@ fi
 # Xfce desktop doesn't get Nautilus libraries pulled in.
 linux_packages() {
     case $pm in
-        apt) pkgs='build-essential pkg-config libfontconfig-dev git curl' np=python3-nautilus ;;
-        dnf) pkgs='gcc pkgconf-pkg-config fontconfig-devel git curl' np=nautilus-python ;;
-        pacman) pkgs='base-devel fontconfig git curl' np=python-nautilus ;;
+        apt) pkgs="build-essential pkg-config libfontconfig-dev git curl $(gui_packages)" np=python3-nautilus ;;
+        dnf) pkgs="gcc pkgconf-pkg-config fontconfig-devel git curl $(gui_packages)" np=nautilus-python ;;
+        pacman) pkgs="base-devel fontconfig git curl $(gui_packages)" np=python-nautilus ;;
     esac
     if is_missing nautilus; then echo "$pkgs"; else echo "$pkgs $np"; fi
 }
@@ -210,6 +210,30 @@ install_linux_packages() {
         dnf) as_root dnf install -y $(linux_packages) ;;
         pacman) as_root pacman -S --needed --noconfirm $(linux_packages) ;;
     esac
+}
+
+# The libraries the dialogs load at run time. winit opens them with dlopen, so
+# the build succeeds without them: X11 and Wayland windowing, the keyboard map
+# and OpenGL. Minimal systems such as WSL's Ubuntu lack some of them.
+GUI_LIBS='libxkbcommon.so.0 libxkbcommon-x11.so.0 libX11.so.6 libX11-xcb.so.1 libXcursor.so.1
+libXrandr.so.2 libXi.so.6 libwayland-client.so.0 libwayland-cursor.so.0 libwayland-egl.so.1 libEGL.so.1 libGL.so.1'
+
+gui_packages() {
+    case $pm in
+        apt) echo libxkbcommon0 libxkbcommon-x11-0 libx11-6 libx11-xcb1 libxcursor1 libxrandr2 libxi6 \
+            libwayland-client0 libwayland-cursor0 libwayland-egl1 libegl1 libgl1 ;;
+        dnf) echo libxkbcommon libxkbcommon-x11 libX11 libX11-xcb libXcursor libXrandr libXi \
+            libwayland-client libwayland-cursor libwayland-egl mesa-libEGL mesa-libGL ;;
+        pacman) echo libxkbcommon libxkbcommon-x11 libx11 libxcursor libxrandr libxi wayland libglvnd ;;
+    esac
+}
+
+# Prints the GUI libraries the dynamic linker can't find.
+missing_gui_libs() {
+    cache=$({ command -v ldconfig >/dev/null && ldconfig -p || /sbin/ldconfig -p; } 2>/dev/null || true)
+    for lib in $GUI_LIBS; do
+        case $cache in *"$lib "*) ;; *) printf '%s ' "$lib" ;; esac
+    done
 }
 
 # Locate the source checkout: next to this script, the current directory,
@@ -332,6 +356,14 @@ check_fontconfig() {
     fi
 }
 
+check_gui_libs() {
+    libs=$(missing_gui_libs)
+    if [ -z "$libs" ]; then ok "GUI libraries (X11, Wayland, xkbcommon, OpenGL)"; else
+        bad "GUI libraries missing, so the dialogs can't open a window: $libs"
+        need gui_libs
+    fi
+}
+
 nautilus_python_lib() {
     for d in /usr/lib/nautilus/extensions-4 /usr/lib64/nautilus/extensions-4 \
         /usr/lib/*/nautilus/extensions-4 /usr/local/lib/nautilus/extensions-4 \
@@ -404,6 +436,7 @@ run_checks() {
         info "System: ${distro_name:-Linux} (package manager: ${pm:-unknown})"
         check_cc
         check_fontconfig
+        check_gui_libs
         check_nautilus
     fi
     check_git
@@ -435,12 +468,13 @@ fix_prerequisites() {
         fi
     fi
 
-    if [ "$os" = linux ] && { is_missing cc || is_missing fontconfig || is_missing git ||
-        is_missing curl || is_missing nautilus_python; }; then
+    if [ "$os" = linux ] && { is_missing cc || is_missing fontconfig || is_missing gui_libs ||
+        is_missing git || is_missing curl || is_missing nautilus_python; }; then
         step "Installing system packages"
         if [ -z "$pm" ]; then
             bad "Unknown distribution; install these yourself, then run this script again:"
-            info "a C compiler, pkg-config, fontconfig headers, git, curl, nautilus-python 4.x"
+            info "a C compiler, pkg-config, fontconfig headers, git, curl, nautilus-python 4.x,"
+            info "and the libraries providing" $GUI_LIBS
             die "missing system packages"
         fi
         info "Packages: $(linux_packages)"
@@ -485,6 +519,8 @@ fix_prerequisites() {
     if [ "$os" = linux ]; then
         { have cc || have gcc || have clang; } || die "still no C compiler"
         { have pkg-config && pkg-config --exists fontconfig; } || die "still no fontconfig headers"
+        libs=$(missing_gui_libs)
+        [ -z "$libs" ] || warn "still missing $libs; the dialogs may not open a window"
         if is_missing nautilus_python && ! nautilus_python_lib >/dev/null; then
             warn "nautilus-python is still missing; the Nautilus extension will not load"
         fi
