@@ -97,8 +97,16 @@ fn merge_scroll_keys_move_the_view() {
     let page = -dlg.get_scroll_y();
     assert!(page > 100.0, "page down scrolls a screenful, got {page}");
     ctrl(w, K::End);
+    let end = dlg.get_scroll_y();
+    assert!(end < -8000.0, "Ctrl+End reaches the end, got {end}");
+    // After a jump this long, Slint's ListView re-anchors on a row boundary,
+    // which can leave the view up to one row short of the bottom (fluent style).
+    press(w, K::DownArrow);
     let bottom = dlg.get_scroll_y();
-    assert!(bottom < -8000.0, "Ctrl+End reaches the end, got {bottom}");
+    assert!(
+        (0.0..18.0).contains(&(end - bottom)),
+        "within a row of the end: {end} -> {bottom}"
+    );
     press(w, K::DownArrow);
     assert_eq!(dlg.get_scroll_y(), bottom, "clamped at the bottom");
     press(w, K::Home);
