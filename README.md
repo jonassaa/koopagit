@@ -19,6 +19,48 @@ conflict viewer.
 | Linux | Nautilus (GNOME Files) 43+ extension (emblems + context menu) | [Linux](#linux-nautilus) |
 | Windows 10/11 | Explorer shell extension (context menu; experimental) | [Windows](#windows) |
 
+## Quick install
+
+An install wizard checks every prerequisite, offers to install what's
+missing, builds KoopaGit, sets up the file-manager integration and verifies
+the result. Run it again to update.
+
+```sh
+# macOS and Linux
+./install.sh                  # or: curl -fsSL https://raw.githubusercontent.com/jonassaa/koopagit/main/install.sh | sh
+./install.sh --check          # only report what's installed and what's missing
+./install.sh --uninstall
+```
+
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+# or: irm https://raw.githubusercontent.com/jonassaa/koopagit/main/install.ps1 | iex
+.\install.ps1 -Check
+.\install.ps1 -Uninstall
+```
+
+The wizards install these prerequisites when they're missing, after asking:
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Build tools | Xcode command-line tools | C compiler, pkg-config, fontconfig headers (apt / dnf / pacman) | Visual Studio 2022 Build Tools, C++ workload (winget) |
+| Git | with the command-line tools | system package | Git for Windows (winget) |
+| Rust 1.92+ | rustup | rustup | rustup |
+| File manager | Finder Sync extension | nautilus-python 4.x (if Nautilus 43+ is installed) | Explorer extension (experimental, off by default) |
+
+They also offer to set your git name and email if they're missing, like
+TortoiseGit's first-start wizard does. On machines with less than 3 GiB of
+RAM per CPU, they limit the number of parallel build jobs so the release
+build doesn't run out of memory. Pass `--yes` (`-Yes` on Windows) to accept
+every default without being asked.
+
+Run outside a checkout, the wizard clones the sources into
+`~/.local/src/koopagit` (Windows: `%LOCALAPPDATA%\KoopaGit\src`). Set
+`KOOPAGIT_SRC` to use another folder.
+
+The sections below describe the same steps done by hand.
+
 ## Requirements (all platforms)
 
 - **Rust 1.92 or newer**, installed with [rustup](https://rustup.rs/).
