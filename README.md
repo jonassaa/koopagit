@@ -9,60 +9,112 @@ and has the same dialogs as TortoiseGit: Commit, Log, Diff, Merge, Rebase,
 Push/Pull/Fetch, Blame, Settings and the rest. KoopaGitMerge is the diff and
 conflict viewer.
 
-> **Status: early development.** There are no prebuilt releases yet. Each
-> platform is installed by building from source, as described below. The
-> Windows Explorer extension is experimental (see [Windows](#windows)).
+> **Status: early development.** There are no prebuilt releases yet:
+> KoopaGit is built from source on your machine, which the installer does for
+> you. The Windows Explorer extension is experimental.
 
-| Platform | File manager integration | Install |
-|---|---|---|
-| macOS 12+ | Finder Sync extension (badges + context menu) | [macOS](#macos) |
-| Linux | Nautilus (GNOME Files) 43+ extension (emblems + context menu) | [Linux](#linux-nautilus) |
-| Windows 10/11 | Explorer shell extension (context menu; experimental) | [Windows](#windows) |
+| Platform | File manager integration |
+|---|---|
+| macOS 12+ | Finder Sync extension (badges + context menu) |
+| Linux | Nautilus (GNOME Files) 43+ extension (emblems + context menu) |
+| Windows 10/11 | Explorer shell extension (context menu; experimental) |
 
-## Quick install
+## Install
 
-An install wizard checks every prerequisite, offers to install what's
-missing, builds KoopaGit, sets up the file-manager integration and verifies
-the result. Run it again to update.
+**macOS and Linux**, in a terminal:
 
 ```sh
-# macOS and Linux
-./install.sh                  # or: curl -fsSL https://raw.githubusercontent.com/jonassaa/koopagit/main/install.sh | sh
-./install.sh --check          # only report what's installed and what's missing
-./install.sh --uninstall
+curl -fsSL https://raw.githubusercontent.com/jonassaa/koopagit/main/install.sh | sh
 ```
+
+**Windows**, in PowerShell (not as administrator; it asks for admin rights
+once, when it needs them):
 
 ```powershell
-# Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-# or: irm https://raw.githubusercontent.com/jonassaa/koopagit/main/install.ps1 | iex
-.\install.ps1 -Check
-.\install.ps1 -Uninstall
+irm https://raw.githubusercontent.com/jonassaa/koopagit/main/install.ps1 | iex
 ```
 
-The wizards install these prerequisites when they're missing, after asking:
+The installer is a full-screen wizard with a progress bar: **Check →
+Setup → Prepare → Build → Install → Finish**. After checking your system it
+shows the recommended setup. Press Enter to install with it, or choose
+**Customize...** to pick the install location, where the `koopagit` command
+goes, the file-manager integration and PATH changes yourself. Use the arrow
+keys (or the item's number) to choose, and Enter to confirm.
+
+The prerequisites it installs when they're missing:
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
-| Build tools | Xcode command-line tools | C compiler, pkg-config, fontconfig headers (apt / dnf / pacman) | Visual Studio 2022 Build Tools, C++ workload (winget) |
-| GUI libraries | built in | X11, Wayland, xkbcommon and OpenGL libraries (apt / dnf / pacman) | built in |
-| Git | with the command-line tools | system package | Git for Windows (winget) |
+| Build tools | Xcode command-line tools | C compiler, pkg-config, fontconfig headers (apt, dnf or pacman) | Visual Studio 2022 Build Tools, C++ workload (winget) |
+| GUI libraries | built in | X11, Wayland, xkbcommon and OpenGL libraries (apt, dnf or pacman) | built in |
+| Git | comes with the command-line tools | system package | Git for Windows (winget) |
 | Rust 1.92+ | rustup | rustup | rustup |
-| File manager | Finder Sync extension | nautilus-python 4.x (if Nautilus 43+ is installed) | Explorer extension (experimental, off by default) |
 
-They also offer to set your git name and email if they're missing, like
-TortoiseGit's first-start wizard does. On machines with less than 3 GiB of
-RAM per CPU, they limit the number of parallel build jobs so the release
-build doesn't run out of memory. Pass `--yes` (`-Yes` on Windows) to accept
-every default without being asked.
+Then it downloads the source into `~/.local/src/koopagit` (Windows:
+`%LOCALAPPDATA%\KoopaGit\src`), builds it (the first build takes a few
+minutes), installs it, and checks that the result works. It also offers to
+set your git name and email if they're missing, like TortoiseGit's
+first-start wizard does.
 
-Run outside a checkout, the wizard clones the sources into
-`~/.local/src/koopagit` (Windows: `%LOCALAPPDATA%\KoopaGit\src`). Set
-`KOOPAGIT_SRC` to use another folder.
+The recommended setup, and the install locations **Customize...** offers:
 
-The sections below describe the same steps done by hand.
+| | Recommended install location | Other locations | File manager |
+|---|---|---|---|
+| macOS | `/Applications/KoopaGit.app`, `koopagit` command in `~/.local/bin` | `~/Applications` (only for you), any folder | Finder extension, enabled for you; Finder restarts |
+| Linux | `~/.cargo/bin` (set by cargo; change with `CARGO_HOME`), `koopagit` command in `~/.local/bin` | command: `/usr/local/bin`, any folder, or none | Nautilus extension and emblems; log out and back in once |
+| Windows | `C:\Program Files\KoopaGit` (asks for admin rights), added to your `PATH` | `%LOCALAPPDATA%\Programs\KoopaGit` (only for you, no admin rights), any folder | Explorer extension off by default (experimental, see [Windows](#windows)) |
 
-## Requirements (all platforms)
+An existing installation is updated where it is. The build's output goes to
+a log file (`~/Library/Logs/KoopaGit/install.log`,
+`~/.local/state/koopagit/install.log`, or `%LOCALAPPDATA%\KoopaGit\install.log`);
+if a step fails, the wizard shows the end of the log.
+
+If Finder doesn't show KoopaGit, turn it on in **System Settings → General →
+Login Items & Extensions → Finder**. To limit Finder's badges and menus to
+some folders, list them one per line in `~/.config/koopagit/finder-roots`.
+
+**Update:** run the same command again.
+
+**Check** what's installed and what's missing, without changing anything,
+or **uninstall**:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jonassaa/koopagit/main/install.sh | sh -s -- --check
+curl -fsSL https://raw.githubusercontent.com/jonassaa/koopagit/main/install.sh | sh -s -- --uninstall
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jonassaa/koopagit/main/install.ps1))) -Check
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jonassaa/koopagit/main/install.ps1))) -Uninstall
+```
+
+From a clone, run `./install.sh` (Windows:
+`powershell -ExecutionPolicy Bypass -File .\install.ps1`) with the same
+options. The installer then builds that clone instead of downloading one.
+
+| Option (`install.sh` / `install.ps1`) | Effect |
+|---|---|
+| `--check` / `-Check` | Report what's installed and what's missing |
+| `--uninstall` / `-Uninstall` | Remove KoopaGit (asks before deleting your settings) |
+| `--yes` / `-Yes` | Install with the recommended setup without asking |
+| `-Explorer` (Windows only) | Register the Explorer extension without asking |
+| `-Dest <folder>` (Windows only) | Install somewhere other than `C:\Program Files\KoopaGit` |
+
+Environment variables: `KOOPAGIT_SRC` (where to download the source),
+`KOOPAGIT_BIN_DIR` (where to put the `koopagit` command; macOS and Linux),
+`KOOPAGIT_APPS_DIR` (where to put `KoopaGit.app`; macOS), and
+`CARGO_BUILD_JOBS`. If you don't set `CARGO_BUILD_JOBS`, the installer allows
+one parallel build job per 3 GiB of RAM so the build doesn't run out of
+memory.
+
+The Windows installer is new. If it fails, follow the [manual steps](#windows)
+and [open an issue](https://github.com/jonassaa/koopagit/issues).
+
+## Manual install
+
+These are the steps the installer runs, if you'd rather do them yourself.
+
+### Requirements (all platforms)
 
 - **Rust 1.92 or newer**, installed with [rustup](https://rustup.rs/).
 - **Git** on `PATH`. KoopaGit runs `git` for every operation that changes a
@@ -75,7 +127,7 @@ git clone https://github.com/jonassaa/koopagit.git
 cd koopagit
 ```
 
-## macOS
+### macOS
 
 Prerequisites: the Xcode command-line tools (`xcode-select --install`). You
 don't need the full Xcode.
@@ -96,12 +148,8 @@ The script does the following:
 
 Run it again to update.
 
-If the script says the extension is not enabled, turn on **KoopaGit** in
-**System Settings → General → Login Items & Extensions → Finder**.
-
-By default Finder shows badges and menus everywhere under your home folder.
-To limit them to some folders, list those folders one per line in
-`~/.config/koopagit/finder-roots`.
+If the script says the extension is not enabled, turn it on as described in
+[Install](#install).
 
 For details, see [integrations/macos/README.md](integrations/macos/README.md).
 
@@ -113,7 +161,7 @@ rm -rf /Applications/KoopaGit.app ~/.local/bin/koopagit   # or ~/Applications/Ko
 killall Finder
 ```
 
-## Linux (Nautilus)
+### Linux (Nautilus)
 
 The extension needs nautilus-python 4.x, which means Nautilus 43 or newer.
 That is Ubuntu 23.04+, Debian 12+, Fedora 37+ or a current Arch.
@@ -182,7 +230,7 @@ rm -f ~/.local/bin/koopagit ~/.config/environment.d/koopagit.conf
 nautilus -q
 ```
 
-## Windows
+### Windows
 
 Prerequisites:
 
